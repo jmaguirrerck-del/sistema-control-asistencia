@@ -1,0 +1,12 @@
+import { NextResponse } from "next/server";
+import { getAdminSession } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { writeAudit } from "@/lib/audit";
+
+const allowed=new Set(["MEDICAL","ADMINISTRATIVE","VACATION","COMMISSION","AFFECTATION","FRANCO","OTHER"]);
+
+export async function GET(){const session=await getAdminSession();if(!session)return NextResponse.json({error:"No autorizado"},{status:401});const sql=db();const rows=await sql`SELECT l.id,l.leave_type,l.date_from::text,l.date_to::text,l.observation,e.last_name,e.first_name FROM leave_records l JOIN employees e ON e.id=l.employee_id WHERE l.active=TRUE ORDER BY l.date_from DESC,e.last_name`;return NextResponse.json(rows);}
+
+export async function POST(request:Request){const session=await getAdminSession();if(!session)return NextResponse.json({error:"No autorizado"},{status:401});const b=await request.json().catch(()=>({}));const employeeId=String(b.employeeId||""),leaveType=String(b.leaveType||""),dateFrom=String(b.dateFrom||""),dateTo=String(b.dateTo||""),observation=String(b.observation||"").slice(0,1000);if(!employeeId||!allowed.has(leaveType)||!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom)||!/^\d{4}-\d{2}-\d{2}$/.test(dateTo)||dateTo<dateFrom)return NextResponse.json({error:"Datos de novedad inválidos"},{status:400});const sql=db();const rows=await sql`INSERT INTO leave_records(employee_id,leave_type,date_from,date_to,observation,created_by) VALUES(${employeeId},${leaveType},${dateFrom}::date,${dateTo}::date,${observation||null},${session.email}) RETURNING id`;await writeAudit({actor:session.email,action:"CREATE_LEAVE",entityType:"leave_record",entityId:String(rows[0].id),next:{employeeId,leaveType,dateFrom,dateTo,observation}});return NextResponse.json({ok:true,id:rows[0].id});}
+
+export async function DELETE(request:Request){const session=await getAdminSession();if(!session)return NextResponse.json({error:"No autorizado"},{status:401});const id=Number(new URL(request.url).searchParams.get("id"));if(!Number.isInteger(id))return NextResponse.json({error:"ID inválido"},{status:400});const sql=db();const prev=(await sql`SELECT * FROM leave_records WHERE id=${id}`)[0];await sql`UPDATE leave_records SET active=FALSE,updated_at=now() WHERE id=${id}`;await writeAudit({actor:session.email,action:"DEACTIVATE_LEAVE",entityType:"leave_record",entityId:String(id),previous:prev,next:{active:false}});return NextResponse.json({ok:true});}

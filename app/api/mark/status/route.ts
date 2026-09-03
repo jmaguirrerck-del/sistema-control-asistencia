@@ -19,7 +19,7 @@ export async function POST(request:Request){
   if(!(await validateQr(token)))return NextResponse.json({error:"El QR venció. Escaneá nuevamente el código de la oficina."},{status:410});
   const geo=await validateLocation({lat:Number(location.lat),lng:Number(location.lng),accuracy:Number(location.accuracy)||null});if(!geo.ok)return NextResponse.json({error:"La ubicación ya no se encuentra dentro del área autorizada."},{status:403});
   const employee=await findEmployeeByPin(pin);if(!employee)return NextResponse.json({error:"PIN incorrecto o no configurado."},{status:401});
-  const device=await checkDevice(String(employee.id),false);
+  const device=await checkDevice(String(employee.id),true);
   if(!device.ok){
     const msg=device.reason==="DEVICE_USED_BY_OTHER"?"Este dispositivo ya está vinculado a otro agente. Solicitá al administrador la desvinculación correspondiente.":"Tu cuenta ya tiene otro dispositivo autorizado. Solicitá al administrador autorización para cambiar de celular.";
     return NextResponse.json({error:msg},{status:403});
@@ -32,5 +32,5 @@ export async function POST(request:Request){
   let action:"ENTRY"|"EXIT"|"DONE"="ENTRY";let lastMark:string|null=null;
   if(attendance && attendance.entry_at && !attendance.exit_at){action="EXIT";lastMark=`Entrada ${new Intl.DateTimeFormat("es-AR",{timeZone:"America/Argentina/Buenos_Aires",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(attendance.entry_at))}`;}
   else if(attendance && attendance.entry_at && attendance.exit_at){action="DONE";lastMark=`Salida ${new Intl.DateTimeFormat("es-AR",{timeZone:"America/Argentina/Buenos_Aires",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(attendance.exit_at))}${attendance.exit_type==="AUTO"?" · cierre automático":""}`;}
-  return NextResponse.json({employee:{id:employee.id,name:`${employee.last_name}, ${employee.first_name}`,dni:employee.dni},deviceBoundNow:device.boundNow,schedule:`${String(ctx.schedule.start_time).slice(0,5)}–${String(ctx.schedule.end_time).slice(0,5)}`,action,lastMark,lateMinutes:Number(attendance?.late_minutes||0)});
+  return NextResponse.json({employee:{id:employee.id,name:`${employee.last_name}, ${employee.first_name}`,dni:employee.dni},deviceBoundNow:device.boundNow,mustChangePin:Boolean(employee.force_pin_change),schedule:`${String(ctx.schedule.start_time).slice(0,5)}–${String(ctx.schedule.end_time).slice(0,5)}`,action,lastMark,lateMinutes:Number(attendance?.late_minutes||0)});
 }

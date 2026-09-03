@@ -21,6 +21,10 @@ export async function initializeDatabase() {
   `;
 
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_lookup TEXT`;
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS force_pin_change BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_changed_at TIMESTAMPTZ`;
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_change_source TEXT`;
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_count INTEGER NOT NULL DEFAULT 0`;
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_pin_lookup ON employees(pin_lookup) WHERE pin_lookup IS NOT NULL`;
 
   await sql`
@@ -108,6 +112,24 @@ export async function initializeDatabase() {
       CHECK (date_to >= date_from)
     )
   `;
+
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS leave_types (
+      id BIGSERIAL PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      article TEXT,
+      category TEXT NOT NULL CHECK(category IN ('MEDICAL','ADMINISTRATIVE')),
+      day_basis TEXT NOT NULL DEFAULT 'CALENDAR' CHECK(day_basis IN ('CALENDAR','BUSINESS','MANUAL')),
+      annual_limit INTEGER, monthly_limit INTEGER, event_limit INTEGER, extension_limit INTEGER,
+      pay_rule TEXT, notes TEXT, active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+  await sql`ALTER TABLE leave_records ADD COLUMN IF NOT EXISTS leave_type_id BIGINT REFERENCES leave_types(id)`;
+  await sql`ALTER TABLE leave_records ADD COLUMN IF NOT EXISTS computed_days INTEGER`;
+  await sql`ALTER TABLE leave_records ADD COLUMN IF NOT EXISTS warning_text TEXT`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS qr_tokens (

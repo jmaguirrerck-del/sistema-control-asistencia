@@ -48,7 +48,7 @@ export async function findEmployeeByPin(pin: string) {
   const sql = db();
   const lookup = await pinLookup(pin);
   const rows = await sql`
-    SELECT id, last_name, first_name, dni, employment, pin_hash
+    SELECT id, last_name, first_name, dni, employment, pin_hash, force_pin_change, pin_changed_at, pin_change_source
     FROM employees
     WHERE active = TRUE AND pin_lookup = ${lookup} AND pin_hash IS NOT NULL
     LIMIT 1

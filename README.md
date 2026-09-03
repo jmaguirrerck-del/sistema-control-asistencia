@@ -1,8 +1,8 @@
-# Sistema de Control de Asistencia DGE — V1.3
+# Sistema de Control de Asistencia DGE — V1.4
 
 Esta versión agrega administración completa del padrón, edición de horarios, control de dispositivo autorizado y ajusta la lógica de tardanza/compensación.
 
-## Cambios V1.3
+## Cambios V1.4
 - Alta de nuevos agentes desde Administración > Personal.
 - Edición de apellido, nombre, DNI, situación de revista y estado activo/inactivo.
 - Edición del horario individual de lunes a viernes, incluyendo días sin prestación.
@@ -56,3 +56,8 @@ Aplicación web Next.js para control de asistencia del personal mediante QR din�
 La aplicación ejecuta un cierre "por demanda" cada vez que se consulta el dashboard o se realiza una marcación. También incluye un endpoint `/api/cron/auto-close` para ejecutar el cierre mediante un programador externo o Vercel Cron en una etapa posterior.
 
 Esto evita depender de un proceso residente, ya que Vercel utiliza funciones serverless.
+
+
+## V1.4
+- El formulario de alta/edición de personal aparece inmediatamente arriba de la lista.
+- Al abrir Alta, Editar, PIN o Dispositivo, la pantalla desplaza automáticamente al panel correspondiente.

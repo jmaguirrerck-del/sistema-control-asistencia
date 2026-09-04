@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/auth";
+import { getAdminSession, isAdmin } from "@/lib/auth";
 import { db, isDatabaseReady } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 
 export async function GET() {
-  const session = await getAdminSession(); if (!session) return NextResponse.json({ error:"No autorizado" },{status:401});
+  const session = await getAdminSession(); if (!isAdmin(session)) return NextResponse.json({ error:"No autorizado" },{status:403});
   const ready = await isDatabaseReady(); if (!ready) return NextResponse.json({ ready:false });
   const sql=db(); const rows=await sql`SELECT office_name, latitude, longitude, radius_meters, lateness_tolerance_minutes, auto_close_grace_minutes, qr_ttl_minutes FROM office_settings WHERE id=1`;
   return NextResponse.json({ ready:true, settings:rows[0] });
 }
 
 export async function PUT(request:Request){
-  const session=await getAdminSession(); if(!session)return NextResponse.json({error:"No autorizado"},{status:401});
+  const session=await getAdminSession(); if(!isAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const body=await request.json().catch(()=>({}));
   const officeName=String(body.office_name||"Dirección de Gestión Escolar").slice(0,120);
   const lat=Number(body.latitude), lng=Number(body.longitude), radius=Number(body.radius_meters), tolerance=Number(body.lateness_tolerance_minutes), qrTtl=Number(body.qr_ttl_minutes);

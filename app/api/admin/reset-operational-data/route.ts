@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/auth";
+import { getAdminSession, isAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ensureV13Schema } from "@/lib/migrations";
 import { writeAudit } from "@/lib/audit";
@@ -7,7 +7,7 @@ import { writeAudit } from "@/lib/audit";
 export async function POST(request: Request) {
   await ensureV13Schema();
   const session = await getAdminSession();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  if (!isAdmin(session)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   if (String(body?.confirmation || "").trim().toUpperCase() !== "REINICIAR") {

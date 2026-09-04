@@ -17,7 +17,9 @@ const catalog = [
   {code:"ART18",name:"Representación gremial",article:"Art. 18",category:"ADMINISTRATIVE",basis:"MANUAL",annual:null,monthly:null,event:null,extension:null,pay:"Sin goce",notes:"Mientras dure el mandato gremial. Sin antigüedad mínima."},
   {code:"ART19_SUP",name:"Preparación y mesa de exámenes - Nivel Superior",article:"Art. 19",category:"ADMINISTRATIVE",basis:"BUSINESS",annual:12,monthly:null,event:3,extension:null,pay:"100%",notes:"Hasta 12 días hábiles/año, fracciones de hasta 3 días hábiles por vez, inmediatos anteriores al examen."},
   {code:"ART19_MEDIA",name:"Preparación y mesa de exámenes - Enseñanza Media",article:"Art. 19",category:"ADMINISTRATIVE",basis:"BUSINESS",annual:8,monthly:null,event:2,extension:null,pay:"100%",notes:"Hasta 8 días hábiles/año, fracciones de hasta 2 días hábiles continuos, incluido el examen."},
-  {code:"ART30B",name:"Razones particulares",article:"Art. 30 inc. b",category:"ADMINISTRATIVE",basis:"CALENDAR",annual:6,monthly:2,event:null,extension:null,pay:"100%",notes:"Hasta 6 días por año calendario y no más de 2 por mes. Sujeto a criterio de autoridad competente."}
+  {code:"ART30A",name:"Nacimiento de hijo - docente varón",article:"Art. 30 inc. a",category:"ADMINISTRATIVE",basis:"BUSINESS",annual:null,monthly:null,event:1,extension:null,pay:"100%",notes:"Un día hábil: el día del nacimiento o el inmediato posterior."},
+  {code:"ART30B",name:"Razones particulares",article:"Art. 30 inc. b",category:"ADMINISTRATIVE",basis:"CALENDAR",annual:6,monthly:2,event:null,extension:null,pay:"100%",notes:"Hasta 6 días por año calendario y no más de 2 por mes. Sujeto a criterio de autoridad competente."},
+  {code:"ART30C",name:"Donación de sangre",article:"Art. 30 inc. c",category:"ADMINISTRATIVE",basis:"CALENDAR",annual:null,monthly:null,event:1,extension:null,pay:"100%",notes:"Justifica el día de la donación. Requiere certificación de establecimiento médico reconocido."}
 ];
 
 export async function ensureV13Schema(){
@@ -33,6 +35,33 @@ export async function ensureV13Schema(){
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(), last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(), revoked_at TIMESTAMPTZ)`;
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_one_active_device ON employee_devices(employee_id) WHERE active=TRUE`;
   await sql`CREATE INDEX IF NOT EXISTS idx_employee_devices_employee ON employee_devices(employee_id)`;
+
+  await sql`CREATE TABLE IF NOT EXISTS app_users (
+    id BIGSERIAL PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('ADMIN','LICENSE_OPERATOR')),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by TEXT,
+    last_login_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`;
+
+  await sql`CREATE TABLE IF NOT EXISTS vacation_entitlements (
+    id BIGSERIAL PRIMARY KEY,
+    employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    benefit_year INTEGER NOT NULL,
+    seniority_years INTEGER NOT NULL DEFAULT 0,
+    service_months INTEGER NOT NULL DEFAULT 12 CHECK(service_months BETWEEN 0 AND 12),
+    extra_fraction_over_15 BOOLEAN NOT NULL DEFAULT FALSE,
+    entitlement_days NUMERIC(8,2) NOT NULL,
+    notes TEXT,
+    updated_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(employee_id,benefit_year)
+  )`;
 
   await sql`CREATE TABLE IF NOT EXISTS leave_types (
     id BIGSERIAL PRIMARY KEY,
@@ -64,4 +93,32 @@ export async function ensureV13Schema(){
       annual_limit=EXCLUDED.annual_limit,monthly_limit=EXCLUDED.monthly_limit,event_limit=EXCLUDED.event_limit,extension_limit=EXCLUDED.extension_limit,
       pay_rule=EXCLUDED.pay_rule,notes=EXCLUDED.notes,updated_at=now()`;
   migrated=true;
+}
+
+export async function ensureHistoricalLicenseImportSchema(){
+  await ensureV13Schema();
+  const sql=db();
+  await sql`CREATE TABLE IF NOT EXISTS historical_leave_import (
+    id BIGSERIAL PRIMARY KEY,
+    source_file TEXT NOT NULL,
+    source_page INTEGER NOT NULL,
+    employee_id TEXT REFERENCES employees(id) ON DELETE SET NULL,
+    confidence TEXT NOT NULL DEFAULT 'UNMATCHED',
+    match_method TEXT,
+    article_text TEXT,
+    date_from DATE,
+    date_to DATE,
+    quantity_value NUMERIC,
+    quantity_unit TEXT CHECK(quantity_unit IN ('DAYS','HOURS')),
+    raw_excerpt TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','CONFIRMED','REJECTED')),
+    imported_leave_id BIGINT REFERENCES leave_records(id) ON DELETE SET NULL,
+    reviewed_by TEXT,
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(source_file, source_page)
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_hist_leave_status ON historical_leave_import(status)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_hist_leave_employee ON historical_leave_import(employee_id)`;
 }

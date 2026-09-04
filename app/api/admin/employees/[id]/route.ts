@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/auth";
+import { getAdminSession, isAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 
 type S={weekday:number;works:boolean;start:string;end:string};
 function validTime(v:string){return /^([01]\d|2[0-3]):[0-5]\d$/.test(v)}
 export async function PUT(request:Request,{params}:{params:Promise<{id:string}>}){
-  const session=await getAdminSession();if(!session)return NextResponse.json({error:"No autorizado"},{status:401});
+  const session=await getAdminSession();if(!isAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const {id}=await params;const b=await request.json().catch(()=>({}));const sql=db();
   const prev=(await sql`SELECT id,last_name,first_name,dni,employment,active FROM employees WHERE id=${id}`)[0];if(!prev)return NextResponse.json({error:"Agente no encontrado"},{status:404});
   const lastName=String(b.lastName||"").trim().slice(0,100),firstName=String(b.firstName||"").trim().slice(0,100),dni=String(b.dni||"").replace(/\D/g,"").slice(0,12),employment=String(b.employment||"").trim().slice(0,120),active=Boolean(b.active);

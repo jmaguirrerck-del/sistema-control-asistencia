@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/auth";
+import { getAdminSession, isAdmin } from "@/lib/auth";
 import { db, isDatabaseReady } from "@/lib/db";
 import { argentinaParts, minutesFromHHMM } from "@/lib/time";
 import { autoCloseEligibleDays } from "@/lib/attendance";
@@ -7,7 +7,7 @@ import { autoCloseEligibleDays } from "@/lib/attendance";
 const leaveLabels:Record<string,string>={MEDICAL:"Licencia médica",ADMINISTRATIVE:"Licencia administrativa",VACATION:"Vacaciones",COMMISSION:"Comisión",AFFECTATION:"Afectación",FRANCO:"Franco",OTHER:"Otra novedad"};
 
 export async function GET(){
-  const session=await getAdminSession(); if(!session)return NextResponse.json({error:"No autorizado"},{status:401});
+  const session=await getAdminSession(); if(!isAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
   if(!(await isDatabaseReady()))return NextResponse.json({ready:false});
   await autoCloseEligibleDays();
   const p=argentinaParts(); const nowMinutes=p.hour*60+p.minute; const sql=db();

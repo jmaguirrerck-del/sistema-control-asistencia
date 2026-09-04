@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/auth";
+import { getAdminSession, isAdmin } from "@/lib/auth";
 import { db, isDatabaseReady } from "@/lib/db";
 import { hashToken, newQrToken } from "@/lib/qr";
 
 export async function POST(request:Request){
-  const session=await getAdminSession(); if(!session)return NextResponse.json({error:"No autorizado"},{status:401});
+  const session=await getAdminSession(); if(!isAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
   if(!(await isDatabaseReady()))return NextResponse.json({error:"Primero inicializá la base de datos"},{status:400});
   const sql=db(); const settings=await sql`SELECT latitude,longitude,qr_ttl_minutes FROM office_settings WHERE id=1`;
   if(settings[0]?.latitude==null||settings[0]?.longitude==null)return NextResponse.json({error:"Primero configurá la ubicación de la oficina"},{status:400});

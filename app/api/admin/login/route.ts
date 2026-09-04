@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { setAdminSession, validAdminCredentials } from "@/lib/auth";
+import { authenticateUser, setAdminSession } from "@/lib/auth";
+import { ensureV13Schema } from "@/lib/migrations";
 
 export async function POST(request: Request) {
+  await ensureV13Schema();
   const body = await request.json().catch(() => ({}));
-  const email = String(body.email || "");
-  const password = String(body.password || "");
-  if (!validAdminCredentials(email, password)) {
-    return NextResponse.json({ error: "Correo o contraseña incorrectos." }, { status: 401 });
-  }
-  await setAdminSession(email);
-  return NextResponse.json({ ok: true });
+  const user = await authenticateUser(String(body.email || ""), String(body.password || ""));
+  if (!user) return NextResponse.json({ error: "Correo o contraseña incorrectos." }, { status: 401 });
+  await setAdminSession(user.email,user.role,user.userId);
+  return NextResponse.json({ ok:true, role:user.role });
 }

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/auth";
+import { getAdminSession, isAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export async function GET(request:Request){
-  const session=await getAdminSession();if(!session)return NextResponse.json({error:"No autorizado"},{status:401});
+  const session=await getAdminSession();if(!isAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const url=new URL(request.url);const date=url.searchParams.get("date");if(!date||!/^\d{4}-\d{2}-\d{2}$/.test(date))return NextResponse.json({error:"Fecha inválida"},{status:400});
   const sql=db();const rows=await sql`
     SELECT ad.id,e.last_name,e.first_name,e.dni,ad.scheduled_start::text,ad.scheduled_end::text,

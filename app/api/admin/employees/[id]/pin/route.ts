@@ -1,13 +1,13 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
-import { getAdminSession, pinLookup } from "@/lib/auth";
+import { getAdminSession, pinLookup, isAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { ensureV13Schema } from "@/lib/migrations";
 
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){
   await ensureV13Schema();
-  const session=await getAdminSession(); if(!session)return NextResponse.json({error:"No autorizado"},{status:401});
+  const session=await getAdminSession(); if(!isAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const {id}=await params; const body=await request.json().catch(()=>({})); const pin=String(body.pin||""); const forceChange=body.forceChange!==false;
   if(!/^\d{4,8}$/.test(pin))return NextResponse.json({error:"El PIN debe tener entre 4 y 8 dígitos"},{status:400});
   const hash=await bcrypt.hash(pin,12); const lookup=await pinLookup(pin); const sql=db();

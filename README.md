@@ -26,3 +26,20 @@ Se agregó en Administración → Configuración una herramienta protegida para 
 - Evita falsos bloqueos por regeneración de cookies al volver a escanear el QR.
 - Mantiene fallback por cookie cuando el almacenamiento local no está disponible.
 - Para dispositivos ya afectados por la implementación anterior, desvincular una sola vez desde Administración y volver a escanear.
+
+
+## V1.13 — Importación histórica de licencias 2026
+
+Se incorpora un módulo de revisión controlada del PDF `LICENCIAS 2026-comprimido.pdf` de 265 páginas. La aplicación registra cada página como fuente, preidentifica agentes cuando el DNI/nombre pudo cruzarse con el padrón y exige confirmación administrativa antes de crear una licencia histórica. Conserva página de origen, nivel de confianza y texto OCR de referencia.
+
+Ruta: `/admin/importacion-licencias`.
+
+
+## Cambios V1.13
+- Nuevo rol **Operador de Licencias** con usuario y contraseña propios.
+- Nueva sección **Usuarios y permisos** para crear/desactivar usuarios y resetear contraseñas.
+- El operador solo puede consultar agentes y registrar/consultar licencias y vacaciones; las APIs sensibles quedan bloqueadas.
+- Se agregan Art. 30 inc. a (nacimiento), b (razones particulares) y c (donación de sangre).
+- Panel de saldo por tipo de licencia: usados, disponibles y excesos anual/mensual, con tramos especiales para Art. 8 a, 8 b/c, Art. 12 y Art. 13 bis.
+- Vacaciones Arts. 4 y 5: cálculo de derecho de referencia 20/25/30/35 días según antigüedad y proporcional 1/12 para interinos con menos de 6 meses de servicios reales. Las fechas siguen siendo de carga manual.
+- Cada carga de licencia/vacaciones conserva el usuario que la registró y queda auditada.

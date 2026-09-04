@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { ensureV13Schema } from "@/lib/migrations";
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
-import { getAdminSession, pinLookup } from "@/lib/auth";
+import { getAdminSession, pinLookup, isAdmin } from "@/lib/auth";
 import { db, isDatabaseReady } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 
@@ -38,7 +38,7 @@ export async function GET(){
 
 export async function POST(request:Request){
   await ensureV13Schema();
-  const session=await getAdminSession();if(!session)return NextResponse.json({error:"No autorizado"},{status:401});
+  const session=await getAdminSession();if(!isAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const b=await request.json().catch(()=>({}));
   const lastName=String(b.lastName||"").trim().slice(0,100), firstName=String(b.firstName||"").trim().slice(0,100), dni=String(b.dni||"").replace(/\D/g,"").slice(0,12), employment=String(b.employment||"").trim().slice(0,120), pin=String(b.pin||"");
   const schedules=parseSchedules(b.schedules);

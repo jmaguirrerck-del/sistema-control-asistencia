@@ -25,7 +25,8 @@ export default function AdminLoginPage() {
       setError(body.error || "No se pudo iniciar sesión");
       return;
     }
-    router.push("/admin");
+    const body = await res.json().catch(() => ({}));
+    router.push(body.role === "LICENSE_OPERATOR" ? "/admin/novedades" : "/admin");
     router.refresh();
   }
 
@@ -34,8 +35,8 @@ export default function AdminLoginPage() {
       <div className="mark-card stack">
         <div>
           <div className="brand-kicker">Dirección de Gestión Escolar</div>
-          <h1 className="heading">Acceso administrador</h1>
-          <p className="subheading">Panel institucional de control de asistencia.</p>
+          <h1 className="heading">Acceso al sistema</h1>
+          <p className="subheading">Ingresá con tu usuario autorizado. El acceso y las opciones dependen del rol asignado.</p>
         </div>
         <form className="stack" onSubmit={submit}>
           <div>

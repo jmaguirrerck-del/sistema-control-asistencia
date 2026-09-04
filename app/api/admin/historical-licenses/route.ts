@@ -43,3 +43,14 @@ export async function GET(request:Request){
   const summary=await sql`SELECT count(*)::int total,count(*) FILTER(WHERE employee_id IS NOT NULL)::int identified,count(*) FILTER(WHERE status='CONFIRMED')::int confirmed,count(*) FILTER(WHERE status='PENDING')::int pending,count(*) FILTER(WHERE employee_id IS NULL)::int unmatched FROM historical_leave_import`;
   return NextResponse.json({rows,summary:summary[0]||{total:0,identified:0,confirmed:0,pending:0,unmatched:0}});
 }
+
+export async function PUT(request:Request){
+  const session=await getAdminSession(); if(!isAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureHistoricalLicenseImportSchema(); const sql=db(); const body=await request.json().catch(()=>({}));
+  if(body.action!=="export-unresolved")return NextResponse.json({error:"Acción inválida"},{status:400});
+  const rows=await sql`SELECT h.source_page,h.confidence,h.match_method,h.article_text,h.date_from::text,h.date_to::text,h.quantity_value,h.quantity_unit,h.raw_excerpt,e.last_name,e.first_name,e.dni FROM historical_leave_import h LEFT JOIN employees e ON e.id=h.employee_id WHERE h.status='PENDING' ORDER BY h.source_page`;
+  const esc=(v:any)=>`"${String(v??"").replaceAll('"','""')}"`;
+  const head=["Pagina","Agente identificado","DNI","Confianza","Metodo","Articulo","Desde","Hasta","Cantidad","Unidad","Extracto"].join(",");
+  const lines=rows.map((r:any)=>[r.source_page,r.last_name?`${r.last_name}, ${r.first_name}`:"",r.dni,r.confidence,r.match_method,r.article_text,r.date_from,r.date_to,r.quantity_value,r.quantity_unit,r.raw_excerpt].map(esc).join(","));
+  return new Response([head,...lines].join("\n"),{headers:{"content-type":"text/csv; charset=utf-8","content-disposition":"attachment; filename=licencias_2026_pendientes_revision.csv"}});
+}

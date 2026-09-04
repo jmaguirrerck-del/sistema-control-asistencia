@@ -7,12 +7,31 @@ type Status = { employee:{id:string;name:string;dni:string}; schedule:string; ac
 type Success = { kind:"ENTRY"|"EXIT"; name:string; serverTime:string; entry?:string; exit?:string; lateMinutes?:number; compensationMinutes?:number; pendingMinutes?:number };
 
 export default function MarkClient({ token }: { token: string }){
+  const [deviceKey,setDeviceKey]=useState("");
   const [loc,setLoc]=useState<Location|null>(null); const [geoState,setGeoState]=useState<"idle"|"checking"|"valid"|"bad">("idle");
   const [geoMsg,setGeoMsg]=useState(""); const [pin,setPin]=useState(""); const [status,setStatus]=useState<Status|null>(null); const [success,setSuccess]=useState<Success|null>(null); const [busy,setBusy]=useState(false); const [error,setError]=useState("");
   const [changePinMode,setChangePinMode]=useState(false); const [newPin,setNewPin]=useState(""); const [repeatPin,setRepeatPin]=useState(""); const [pinMessage,setPinMessage]=useState("");
   const currentTime=useMemo(()=>new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}),[]);
 
-  useEffect(()=>{ if(!token){setGeoState("bad");setGeoMsg("El QR no contiene un token válido.");return;} verifyLocation(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ },[token]);
+  useEffect(()=>{
+    try{
+      const storageKey="dge_stable_device_v1";
+      let value=window.localStorage.getItem(storageKey)||"";
+      if(!value){
+        const bytes=new Uint8Array(24);
+        window.crypto.getRandomValues(bytes);
+        value=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
+        window.localStorage.setItem(storageKey,value);
+      }
+      setDeviceKey(value);
+    }catch{
+      // Server keeps a cookie fallback if local storage is unavailable.
+      setDeviceKey("");
+    }
+    if(!token){setGeoState("bad");setGeoMsg("El QR no contiene un token válido.");return;}
+    verifyLocation();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  },[token]);
 
   function verifyLocation(){
     setError(""); setGeoMsg(""); setGeoState("checking");
@@ -27,20 +46,20 @@ export default function MarkClient({ token }: { token: string }){
   }
 
   async function identify(e:FormEvent){e.preventDefault(); if(!loc)return;setBusy(true);setError("");
-    const r=await fetch("/api/mark/status",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,pin})});const b=await r.json().catch(()=>({}));setBusy(false);if(!r.ok){setError(b.error||"No se pudo identificar al agente.");return;}setStatus(b);setChangePinMode(Boolean(b.mustChangePin));setPinMessage("");
+    const r=await fetch("/api/mark/status",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,pin,deviceKey})});const b=await r.json().catch(()=>({}));setBusy(false);if(!r.ok){setError(b.error||"No se pudo identificar al agente.");return;}setStatus(b);setChangePinMode(Boolean(b.mustChangePin));setPinMessage("");
   }
 
   async function changePin(e:FormEvent){e.preventDefault();if(!loc||!status)return;setPinMessage("");setError("");
     if(!/^\d{4,8}$/.test(newPin)){setError("El nuevo PIN debe tener entre 4 y 8 dígitos.");return;}
     if(newPin!==repeatPin){setError("Los nuevos PIN no coinciden.");return;}
     setBusy(true);
-    const r=await fetch("/api/mark/change-pin",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,currentPin:pin,newPin})});
+    const r=await fetch("/api/mark/change-pin",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,currentPin:pin,newPin,deviceKey})});
     const b=await r.json().catch(()=>({}));setBusy(false);
     if(!r.ok){setError(b.error||"No se pudo cambiar el PIN.");return;}
     setPin(newPin);setNewPin("");setRepeatPin("");setChangePinMode(false);setStatus({...status,mustChangePin:false});setPinMessage("PIN actualizado correctamente. Ya podés continuar con la marcación.");
   }
 
-  async function mark(){if(!loc||!status)return;setBusy(true);setError("");const r=await fetch("/api/mark/submit",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,pin,action:status.action})});const b=await r.json().catch(()=>({}));setBusy(false);if(!r.ok){setError(b.error||"No se pudo registrar la marcación.");return;}setSuccess(b);}
+  async function mark(){if(!loc||!status)return;setBusy(true);setError("");const r=await fetch("/api/mark/submit",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,pin,action:status.action,deviceKey})});const b=await r.json().catch(()=>({}));setBusy(false);if(!r.ok){setError(b.error||"No se pudo registrar la marcación.");return;}setSuccess(b);}
 
   if(success)return <main className="mark-shell"><div className="mark-card stack" style={{textAlign:"center"}}><div className="status-icon good">✓</div><h1 className="mark-title">{success.kind==="ENTRY"?"ENTRADA REGISTRADA CORRECTAMENTE":"SALIDA REGISTRADA CORRECTAMENTE"}</h1><div className="mark-time">{success.serverTime}</div><strong>{success.name}</strong><div className="notice good">Ubicación verificada · registro guardado en el servidor</div>{success.kind==="ENTRY"?<div className="muted">Próxima acción: registrar salida al finalizar la jornada.</div>:<div className="grid grid-2" style={{textAlign:"left"}}><div className="kpi info"><div className="kpi-label">Compensación</div><div className="kpi-value">{success.compensationMinutes||0} min</div></div><div className="kpi info"><div className="kpi-label">Saldo pendiente</div><div className="kpi-value">{success.pendingMinutes||0} min</div></div></div>}<button className="btn btn-secondary" onClick={()=>window.location.reload()}>Finalizar</button></div></main>;
 

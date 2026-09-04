@@ -12,6 +12,9 @@ export default function ConfiguracionPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetConfirmation, setResetConfirmation] = useState("");
+  const [resetMsg, setResetMsg] = useState("");
 
   async function load() {
     const res = await fetch("/api/admin/settings", { cache: "no-store" });
@@ -37,6 +40,24 @@ export default function ConfiguracionPage() {
     const body = await res.json().catch(()=>({})); setBusy(false);
     if (!res.ok) { setMsg(body.error || "No se pudo guardar"); return; }
     setMsg("Configuración guardada correctamente."); setSettings(body.settings);
+  }
+
+  async function resetOperationalData() {
+    if (resetConfirmation.trim().toUpperCase() !== "REINICIAR") {
+      setResetMsg("Escribí REINICIAR para confirmar.");
+      return;
+    }
+    setBusy(true); setResetMsg("");
+    const res = await fetch("/api/admin/reset-operational-data", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirmation: resetConfirmation }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) { setResetMsg(body.error || "No se pudo reiniciar los datos operativos."); return; }
+    setResetMsg("Datos de prueba eliminados. El padrón, horarios, configuración, catálogo de licencias y PINs se conservaron.");
+    setResetConfirmation("");
   }
 
   function useMyLocation() {
@@ -75,5 +96,29 @@ export default function ConfiguracionPage() {
       {msg && <div className={`notice ${msg.includes("correctamente") ? "good" : "bad"}`}>{msg}</div>}
       <button className="btn btn-primary" disabled={busy}>{busy ? "Guardando…" : "Guardar configuración"}</button>
     </form>}
+
+    {ready && <div className="card stack">
+      <div>
+        <h2 style={{margin:"0 0 6px"}}>Mantenimiento de datos</h2>
+        <p className="subheading" style={{margin:0}}>Herramienta de uso excepcional durante la etapa de prueba.</p>
+      </div>
+      <div className="notice warn">
+        <strong>Reiniciar datos de prueba</strong><br/>
+        Elimina marcaciones de entrada/salida, licencias y vacaciones cargadas, vínculos de dispositivos, QR históricos y auditoría de prueba.
+        <br/><strong>No elimina</strong> personal, horarios, ubicación de la oficina, catálogo de licencias ni PINs actuales.
+      </div>
+      {!resetOpen ? <button className="btn btn-danger" type="button" onClick={()=>{setResetOpen(true);setResetMsg("");}}>Reiniciar datos de prueba</button> : <div className="stack">
+        <div className="notice bad"><strong>Esta acción no se puede deshacer.</strong> Usala únicamente cuando quieras comenzar la operación oficial con la base limpia.</div>
+        <div>
+          <label className="label">Para confirmar, escribí REINICIAR</label>
+          <input className="input" value={resetConfirmation} onChange={e=>setResetConfirmation(e.target.value)} placeholder="REINICIAR" autoComplete="off" />
+        </div>
+        {resetMsg && <div className={`notice ${resetMsg.startsWith("Datos de prueba") ? "good" : "bad"}`}>{resetMsg}</div>}
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          <button className="btn btn-danger" type="button" disabled={busy || resetConfirmation.trim().toUpperCase()!=="REINICIAR"} onClick={resetOperationalData}>{busy ? "Reiniciando…" : "Confirmar reinicio"}</button>
+          <button className="btn btn-secondary" type="button" disabled={busy} onClick={()=>{setResetOpen(false);setResetConfirmation("");setResetMsg("");}}>Cancelar</button>
+        </div>
+      </div>}
+    </div>}
   </div>;
 }

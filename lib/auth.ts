@@ -34,8 +34,10 @@ export async function getAdminSession() {
   } catch { return null; }
 }
 
-export function isAdmin(session: Awaited<ReturnType<typeof getAdminSession>>) { return Boolean(session && session.role === "ADMIN"); }
-export function canManageLicenses(session: Awaited<ReturnType<typeof getAdminSession>>) { return Boolean(session && (session.role === "ADMIN" || session.role === "LICENSE_OPERATOR")); }
+type Session = Awaited<ReturnType<typeof getAdminSession>>;
+type NonNullSession = NonNullable<Session>;
+export function isAdmin(session: Session): session is NonNullSession & { role: "ADMIN" } { return session?.role === "ADMIN"; }
+export function canManageLicenses(session: Session): session is NonNullSession { return Boolean(session && (session.role === "ADMIN" || session.role === "LICENSE_OPERATOR")); }
 
 export async function authenticateUser(email: string, password: string): Promise<{email:string;role:AppRole;userId:number|null}|null> {
   const normalized=email.trim().toLowerCase();

@@ -46,3 +46,7 @@ Ruta: `/admin/importacion-licencias`.
 
 ## V1.18 — Legajo integral
 Se incorpora un módulo Legajos para consultar por agente su situación, antigüedad, horarios, PIN/dispositivo, asistencia, ausencias, tardanzas, licencias médicas, administrativas y vacaciones. Licencias y vacaciones incorpora filtros de historial por categoría y agente.
+
+
+## V1.20
+Generación masiva de PIN provisorios para agentes activos sin PIN, con vencimiento a 7 días, cambio obligatorio en primer uso y exportación CSV de entrega única.

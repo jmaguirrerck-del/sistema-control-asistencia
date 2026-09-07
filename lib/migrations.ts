@@ -29,6 +29,7 @@ export async function ensureV13Schema(){
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_changed_at TIMESTAMPTZ`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_change_source TEXT`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_count INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS temporary_pin_expires_at TIMESTAMPTZ`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS seniority_date DATE`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS seniority_notes TEXT`;
   await sql`CREATE TABLE IF NOT EXISTS employee_devices (

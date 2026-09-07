@@ -48,13 +48,14 @@ export async function findEmployeeByPin(pin: string) {
   const sql = db();
   const lookup = await pinLookup(pin);
   const rows = await sql`
-    SELECT id, last_name, first_name, dni, employment, pin_hash, force_pin_change, pin_changed_at, pin_change_source
+    SELECT id, last_name, first_name, dni, employment, pin_hash, force_pin_change, pin_changed_at, pin_change_source, temporary_pin_expires_at
     FROM employees
     WHERE active = TRUE AND pin_lookup = ${lookup} AND pin_hash IS NOT NULL
     LIMIT 1
   `;
   const row = rows[0];
   if (!row?.pin_hash) return null;
+  if (row.temporary_pin_expires_at && new Date(row.temporary_pin_expires_at).getTime() < Date.now()) return null;
   return (await bcrypt.compare(pin, String(row.pin_hash))) ? row : null;
 }
 

@@ -25,6 +25,7 @@ export async function initializeDatabase() {
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_changed_at TIMESTAMPTZ`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_change_source TEXT`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_reset_count INTEGER NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS temporary_pin_expires_at TIMESTAMPTZ`;
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_pin_lookup ON employees(pin_lookup) WHERE pin_lookup IS NOT NULL`;
 
   await sql`

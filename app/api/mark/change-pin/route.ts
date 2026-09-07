@@ -28,7 +28,7 @@ export async function POST(request:Request){
   const dup=await sql`SELECT id FROM employees WHERE pin_lookup=${lookup} AND id<>${String(employee.id)} LIMIT 1`;
   if(dup[0])return NextResponse.json({error:"Ese PIN ya está asignado a otro agente. Elegí uno diferente."},{status:409});
   const hash=await bcrypt.hash(newPin,12);
-  await sql`UPDATE employees SET pin_hash=${hash},pin_lookup=${lookup},force_pin_change=FALSE,pin_changed_at=now(),pin_change_source='EMPLOYEE',updated_at=now() WHERE id=${String(employee.id)}`;
+  await sql`UPDATE employees SET pin_hash=${hash},pin_lookup=${lookup},force_pin_change=FALSE,pin_changed_at=now(),pin_change_source='EMPLOYEE',temporary_pin_expires_at=NULL,updated_at=now() WHERE id=${String(employee.id)}`;
   await writeAudit({actor:`employee:${employee.id}`,action:"CHANGE_OWN_PIN",entityType:"employee",entityId:String(employee.id),next:{pinChanged:true,source:"EMPLOYEE"}});
   return NextResponse.json({ok:true,message:"PIN actualizado correctamente."});
 }

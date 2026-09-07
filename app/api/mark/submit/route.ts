@@ -13,7 +13,7 @@ export async function POST(request:Request){
   const qr=await validateQr(token);if(!qr)return NextResponse.json({error:"El QR venció. Escaneá nuevamente el código de la oficina."},{status:410});
   const geo=await validateLocation({lat:Number(location.lat),lng:Number(location.lng),accuracy:Number(location.accuracy)||null});if(!geo.ok)return NextResponse.json({error:"La ubicación está fuera del área autorizada."},{status:403});
   const employee=await findEmployeeByPin(pin);if(!employee)return NextResponse.json({error:"PIN incorrecto."},{status:401});
-  const device=await checkDevice(String(employee.id),true,b.deviceKey);
+  const device=await checkDevice(String(employee.id),true,b.deviceKey,b.deviceSignature);
   if(!device.ok)return NextResponse.json({error:device.reason==="DEVICE_USED_BY_OTHER"?"Este dispositivo está vinculado a otro agente.":"Existe otro dispositivo autorizado para este agente."},{status:403});
   const ctx=await todayEmployeeContext(String(employee.id));if(!ctx.schedule)return NextResponse.json({error:"Hoy no corresponde prestación."},{status:409});if(ctx.leave)return NextResponse.json({error:"Existe una licencia, vacación o novedad vigente para hoy."},{status:409});
   try{

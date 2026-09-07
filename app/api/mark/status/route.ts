@@ -19,7 +19,7 @@ export async function POST(request:Request){
   if(!(await validateQr(token)))return NextResponse.json({error:"El QR venció. Escaneá nuevamente el código de la oficina."},{status:410});
   const geo=await validateLocation({lat:Number(location.lat),lng:Number(location.lng),accuracy:Number(location.accuracy)||null});if(!geo.ok)return NextResponse.json({error:"La ubicación ya no se encuentra dentro del área autorizada."},{status:403});
   const employee=await findEmployeeByPin(pin);if(!employee)return NextResponse.json({error:"PIN incorrecto o no configurado."},{status:401});
-  const device=await checkDevice(String(employee.id),true,b.deviceKey);
+  const device=await checkDevice(String(employee.id),true,b.deviceKey,b.deviceSignature);
   if(!device.ok){
     const msg=device.reason==="DEVICE_USED_BY_OTHER"?"Este dispositivo ya está vinculado a otro agente. Solicitá al administrador la desvinculación correspondiente.":"Tu cuenta ya tiene otro dispositivo autorizado. Solicitá al administrador autorización para cambiar de celular.";
     return NextResponse.json({error:msg},{status:403});

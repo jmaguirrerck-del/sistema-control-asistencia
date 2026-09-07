@@ -25,8 +25,8 @@ export default function LegajosPage(){
     const r=await fetch(`/api/admin/employees/${employeeId}/seniority`,{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({seniorityDate:senDate,seniorityNotes:senNotes})});
     const b=await r.json().catch(()=>({}));setMsg(r.ok?"Antigüedad guardada.":b.error||"No se pudo guardar");if(r.ok)await load();
   }
-  const medical=(data?.leaves||[]).filter((r:any)=>r.category==="MEDICAL"||(!r.category&&r.leave_type==="MEDICAL"));
-  const administrative=(data?.leaves||[]).filter((r:any)=>r.category==="ADMINISTRATIVE"||(!r.category&&r.leave_type==="ADMINISTRATIVE"));
+  const medical=(data?.leaves||[]).filter((r:any)=>r.leave_type==="MEDICAL"||r.category==="MEDICAL");
+  const administrative=(data?.leaves||[]).filter((r:any)=>r.leave_type==="ADMINISTRATIVE"||r.category==="ADMINISTRATIVE");
   const vacations=(data?.leaves||[]).filter((r:any)=>r.leave_type==="VACATION");
   return <div className="stack">
     <div><h1 className="heading">Legajos del personal</h1><p className="subheading">Consulta integral por agente: asistencia, licencias, vacaciones, tardanzas, faltas, horarios, antigüedad, PIN y dispositivo.</p></div>
@@ -46,6 +46,7 @@ export default function LegajosPage(){
         <h3>Licencias médicas</h3>{medical.length?<LeaveTable rows={medical}/>:<div className="notice info">No hay licencias médicas registradas para este agente en el período seleccionado. Si todavía no ejecutaste la importación histórica confirmada, hacelo desde <Link href="/admin/importacion-licencias"><strong>Importación histórica</strong></Link>.</div>}
         <h3>Licencias administrativas</h3>{administrative.length?<LeaveTable rows={administrative}/>:<div className="muted">Sin registros administrativos en el período.</div>}
         <h3>Vacaciones</h3>{vacations.length?<LeaveTable rows={vacations}/>:<div className="muted">Sin vacaciones registradas en el período.</div>}
+        <h3>Todos los registros del período</h3>{(data.leaves||[]).length?<LeaveTable rows={data.leaves}/>:<div className="muted">Sin licencias ni vacaciones registradas en el período.</div>}
       </div>
       <div className="card table-wrap"><h2 style={{marginTop:0}}>Detalle diario</h2><table><thead><tr><th>Fecha</th><th>Horario</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Atraso</th><th>Compensado</th><th>Saldo</th></tr></thead><tbody>{data.attendance.map((r:any)=><tr key={r.work_date}><td>{r.work_date}</td><td>{r.scheduled_start}–{r.scheduled_end}</td><td>{r.entry_local||"—"}</td><td>{r.exit_local||"—"}</td><td>{statusLabel(r.status)}{r.status==="JUSTIFIED"&&<div className="muted">{r.article?`${r.article} · `:""}{r.type_name||r.leave_type}</div>}</td><td>{r.late_minutes||0} min</td><td>{r.compensation_minutes||0} min</td><td>{r.pending_minutes||0} min</td></tr>)}</tbody></table></div>
     </>}

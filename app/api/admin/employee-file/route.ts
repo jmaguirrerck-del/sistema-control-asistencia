@@ -84,8 +84,8 @@ export async function GET(request:Request){
   };
   const l=leaves as any[];
   const leaveSummary={
-    medicalDays:l.filter(r=>r.category==="MEDICAL"||(!r.category&&r.leave_type==="MEDICAL")).reduce((s,r)=>s+Number(r.computed_days||0),0),
-    administrativeDays:l.filter(r=>r.category==="ADMINISTRATIVE"||(!r.category&&r.leave_type==="ADMINISTRATIVE")).reduce((s,r)=>s+Number(r.computed_days||0),0),
+    medicalDays:l.filter(r=>r.leave_type==="MEDICAL"||r.category==="MEDICAL").reduce((s,r)=>s+Number(r.computed_days||0),0),
+    administrativeDays:l.filter(r=>r.leave_type==="ADMINISTRATIVE"||r.category==="ADMINISTRATIVE").reduce((s,r)=>s+Number(r.computed_days||0),0),
     vacationDays:l.filter(r=>r.leave_type==="VACATION").reduce((s,r)=>s+Number(r.computed_days||0),0),
     totalRecords:l.length
   };

@@ -43,3 +43,6 @@ Ruta: `/admin/importacion-licencias`.
 - Panel de saldo por tipo de licencia: usados, disponibles y excesos anual/mensual, con tramos especiales para Art. 8 a, 8 b/c, Art. 12 y Art. 13 bis.
 - Vacaciones Arts. 4 y 5: cálculo de derecho de referencia 20/25/30/35 días según antigüedad y proporcional 1/12 para interinos con menos de 6 meses de servicios reales. Las fechas siguen siendo de carga manual.
 - Cada carga de licencia/vacaciones conserva el usuario que la registró y queda auditada.
+
+## V1.18 — Legajo integral
+Se incorpora un módulo Legajos para consultar por agente su situación, antigüedad, horarios, PIN/dispositivo, asistencia, ausencias, tardanzas, licencias médicas, administrativas y vacaciones. Licencias y vacaciones incorpora filtros de historial por categoría y agente.

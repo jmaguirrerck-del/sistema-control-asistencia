@@ -8,7 +8,7 @@ function dayCount(a:string,b:string,basis:string){const start=new Date(a+"T00:00
 
 export async function GET(){
   await ensureV13Schema();const session=await getAdminSession();if(!canManageLicenses(session))return NextResponse.json({error:"No autorizado"},{status:403});
-  const sql=db();const rows=await sql`SELECT l.id,l.leave_type,l.leave_type_id,l.date_from::text,l.date_to::text,l.observation,l.computed_days,l.warning_text,l.created_by,l.created_at,e.last_name,e.first_name,t.name AS type_name,t.article,t.category FROM leave_records l JOIN employees e ON e.id=l.employee_id LEFT JOIN leave_types t ON t.id=l.leave_type_id WHERE l.active=TRUE ORDER BY l.date_from DESC,e.last_name`;
+  const sql=db();const rows=await sql`SELECT l.id,l.employee_id,l.leave_type,l.leave_type_id,l.date_from::text,l.date_to::text,l.observation,l.computed_days,l.warning_text,l.created_by,l.created_at,e.last_name,e.first_name,t.name AS type_name,t.article,t.category FROM leave_records l JOIN employees e ON e.id=l.employee_id LEFT JOIN leave_types t ON t.id=l.leave_type_id WHERE l.active=TRUE ORDER BY l.date_from DESC,e.last_name`;
   return NextResponse.json(rows);
 }
 

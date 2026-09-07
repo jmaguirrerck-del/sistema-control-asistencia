@@ -10,6 +10,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
     <main className="main"><div className="container admin-shell"><nav className="admin-nav" aria-label="Administración">
       {!operator&&<Link href="/admin">Resumen diario</Link>}
       {!operator&&<Link href="/admin/personal">Personal</Link>}
+      {!operator&&<Link href="/admin/legajos">Legajos</Link>}
       {!operator&&<Link href="/admin/registros">Registros</Link>}
       <Link href="/admin/novedades">Licencias y vacaciones</Link>
       {!operator&&<Link href="/admin/importacion-licencias">Importación histórica</Link>}

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { getAdminSession, isAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { ensureV13Schema } from "@/lib/migrations";
+import { ensureV119LeaveDetailSchema } from "@/lib/migrations";
 
 function validDate(v:string|null){return !!v&&/^\d{4}-\d{2}-\d{2}$/.test(v)}
 
 export async function GET(request:Request){
-  await ensureV13Schema();
+  await ensureV119LeaveDetailSchema();
   const session=await getAdminSession(); if(!isAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const u=new URL(request.url),employeeId=u.searchParams.get("employeeId")||"";
   const year=new Date().getFullYear();
@@ -26,36 +26,48 @@ export async function GET(request:Request){
 
   const leaves=await sql`
     SELECT l.id,l.leave_type,l.leave_type_id,l.date_from::text,l.date_to::text,l.observation,l.computed_days,l.warning_text,l.created_by,l.created_at,
-      t.code,t.name AS type_name,t.article,t.category,t.annual_limit,t.monthly_limit,t.event_limit,t.pay_rule
+      l.source_article,l.quantity_value,l.quantity_unit,
+      t.code,t.name AS type_name,COALESCE(t.article,l.source_article) AS article,t.category,t.annual_limit,t.monthly_limit,t.event_limit,t.pay_rule
     FROM leave_records l LEFT JOIN leave_types t ON t.id=l.leave_type_id
     WHERE l.employee_id=${employeeId} AND l.active=TRUE AND l.date_to>=${from}::date AND l.date_from<=${to}::date
     ORDER BY l.date_from DESC,l.id DESC`;
 
   const attendance=await sql`
-    WITH scheduled AS (
-      SELECT d::date AS work_date,s.start_time,s.end_time
+    WITH dates AS (
+      SELECT d::date AS work_date
       FROM generate_series(${from}::date,${to}::date,'1 day'::interval) d
-      JOIN employee_schedules s ON s.employee_id=${employeeId} AND s.weekday=EXTRACT(ISODOW FROM d)::int
+    ), base AS (
+      SELECT dt.work_date,
+        s.start_time AS schedule_start,s.end_time AS schedule_end,
+        ad.id AS attendance_id,ad.scheduled_start AS actual_start,ad.scheduled_end AS actual_end,
+        ad.entry_at,ad.exit_at,ad.late_minutes,ad.compensation_minutes,ad.pending_minutes,ad.exit_type
+      FROM dates dt
+      LEFT JOIN employee_schedules s ON s.employee_id=${employeeId} AND s.weekday=EXTRACT(ISODOW FROM dt.work_date)::int
+      LEFT JOIN attendance_days ad ON ad.employee_id=${employeeId} AND ad.work_date=dt.work_date
+      WHERE s.employee_id IS NOT NULL OR ad.id IS NOT NULL OR EXISTS (
+        SELECT 1 FROM leave_records l WHERE l.employee_id=${employeeId} AND l.active=TRUE AND dt.work_date BETWEEN l.date_from AND l.date_to
+      )
     )
-    SELECT sc.work_date::text,left(sc.start_time::text,5) AS scheduled_start,left(sc.end_time::text,5) AS scheduled_end,
-      to_char(ad.entry_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI') AS entry_local,
-      to_char(ad.exit_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI') AS exit_local,
-      COALESCE(ad.late_minutes,0)::int AS late_minutes,COALESCE(ad.compensation_minutes,0)::int AS compensation_minutes,
-      COALESCE(ad.pending_minutes,0)::int AS pending_minutes,ad.exit_type,
+    SELECT b.work_date::text,
+      left(COALESCE(b.actual_start,b.schedule_start)::text,5) AS scheduled_start,
+      left(COALESCE(b.actual_end,b.schedule_end)::text,5) AS scheduled_end,
+      to_char(b.entry_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI') AS entry_local,
+      to_char(b.exit_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI') AS exit_local,
+      COALESCE(b.late_minutes,0)::int AS late_minutes,COALESCE(b.compensation_minutes,0)::int AS compensation_minutes,
+      COALESCE(b.pending_minutes,0)::int AS pending_minutes,b.exit_type,
       lr.leave_type,lr.type_name,lr.article,lr.category,
-      CASE WHEN ad.entry_at IS NOT NULL THEN 'PRESENT'
+      CASE WHEN b.entry_at IS NOT NULL THEN 'PRESENT'
            WHEN lr.id IS NOT NULL THEN 'JUSTIFIED'
-           WHEN sc.work_date<CURRENT_DATE THEN 'ABSENT'
+           WHEN b.schedule_start IS NOT NULL AND b.work_date<CURRENT_DATE THEN 'ABSENT'
            ELSE 'PENDING' END AS status
-    FROM scheduled sc
-    LEFT JOIN attendance_days ad ON ad.employee_id=${employeeId} AND ad.work_date=sc.work_date
+    FROM base b
     LEFT JOIN LATERAL (
-      SELECT l.id,l.leave_type,t.name AS type_name,t.article,t.category
+      SELECT l.id,l.leave_type,t.name AS type_name,COALESCE(t.article,l.source_article) AS article,t.category
       FROM leave_records l LEFT JOIN leave_types t ON t.id=l.leave_type_id
-      WHERE l.employee_id=${employeeId} AND l.active=TRUE AND sc.work_date BETWEEN l.date_from AND l.date_to
+      WHERE l.employee_id=${employeeId} AND l.active=TRUE AND b.work_date BETWEEN l.date_from AND l.date_to
       ORDER BY l.created_at DESC LIMIT 1
     ) lr ON TRUE
-    ORDER BY sc.work_date DESC`;
+    ORDER BY b.work_date DESC`;
 
   const a=attendance as any[];
   const summary={

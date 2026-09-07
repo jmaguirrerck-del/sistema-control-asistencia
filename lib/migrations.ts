@@ -126,3 +126,16 @@ export async function ensureHistoricalLicenseImportSchema(){
   await sql`CREATE INDEX IF NOT EXISTS idx_hist_leave_status ON historical_leave_import(status)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_hist_leave_employee ON historical_leave_import(employee_id)`;
 }
+
+export async function ensureV119LeaveDetailSchema(){
+  await ensureV13Schema();
+  const sql=db();
+  await sql`ALTER TABLE leave_records ADD COLUMN IF NOT EXISTS source_article TEXT`;
+  await sql`ALTER TABLE leave_records ADD COLUMN IF NOT EXISTS quantity_value NUMERIC`;
+  await sql`ALTER TABLE leave_records ADD COLUMN IF NOT EXISTS quantity_unit TEXT`;
+  await sql`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='leave_records_quantity_unit_chk') THEN
+      ALTER TABLE leave_records ADD CONSTRAINT leave_records_quantity_unit_chk CHECK(quantity_unit IS NULL OR quantity_unit IN ('DAYS','HOURS'));
+    END IF;
+  END $$`;
+}

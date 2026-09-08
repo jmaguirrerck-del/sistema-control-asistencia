@@ -55,6 +55,8 @@ export async function GET(request:Request){
       to_char(b.exit_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI') AS exit_local,
       COALESCE(b.late_minutes,0)::int AS late_minutes,COALESCE(b.compensation_minutes,0)::int AS compensation_minutes,
       COALESCE(b.pending_minutes,0)::int AS pending_minutes,b.exit_type,
+      COALESCE((SELECT json_agg(json_build_object('id',ae.id,'event_type',ae.event_type,'time',to_char(ae.occurred_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI')) ORDER BY ae.occurred_at,ae.id) FROM attendance_events ae WHERE ae.attendance_day_id=b.attendance_id AND ae.event_type IN ('ENTRY','EXIT','REENTRY','AUTO_EXIT')),'[]'::json) AS movements,
+      COALESCE((SELECT json_agg(json_build_object('id',ai.id,'exit_time',to_char(ai.exited_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI'),'reentry_time',to_char(ai.reentered_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI'),'minutes',CASE WHEN ai.reentered_at IS NULL THEN NULL ELSE GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (ai.reentered_at-ai.exited_at))/60))::int END,'reason_code',ai.reason_code,'admin_note',ai.admin_note,'counts_as_work',ai.counts_as_work) ORDER BY ai.exited_at) FROM attendance_intervals ai WHERE ai.attendance_day_id=b.attendance_id AND ai.reentered_at IS NOT NULL),'[]'::json) AS intervals,
       lr.leave_type,lr.type_name,lr.article,lr.category,
       CASE WHEN b.entry_at IS NOT NULL THEN 'PRESENT'
            WHEN lr.id IS NOT NULL THEN 'JUSTIFIED'

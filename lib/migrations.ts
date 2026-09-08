@@ -43,6 +43,39 @@ export async function ensureV13Schema(){
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_one_active_device ON employee_devices(employee_id) WHERE active=TRUE`;
   await sql`CREATE INDEX IF NOT EXISTS idx_employee_devices_employee ON employee_devices(employee_id)`;
 
+  // V1.21: secuencia de movimientos durante la jornada.
+  // Se amplía attendance_events para admitir REENTRY y se guardan los intervalos
+  // de salida intermedia para que Administración clasifique su motivo posteriormente.
+  await sql`DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname='attendance_events_event_type_check') THEN
+      ALTER TABLE attendance_events DROP CONSTRAINT attendance_events_event_type_check;
+    END IF;
+  END $$`;
+  await sql`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='attendance_events_event_type_v121_chk') THEN
+      ALTER TABLE attendance_events ADD CONSTRAINT attendance_events_event_type_v121_chk
+      CHECK(event_type IN ('ENTRY','EXIT','REENTRY','AUTO_EXIT','ADMIN_EDIT','REJECTED'));
+    END IF;
+  END $$`;
+  await sql`CREATE TABLE IF NOT EXISTS attendance_intervals (
+    id BIGSERIAL PRIMARY KEY,
+    attendance_day_id BIGINT NOT NULL REFERENCES attendance_days(id) ON DELETE CASCADE,
+    employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    exit_event_id BIGINT REFERENCES attendance_events(id) ON DELETE SET NULL,
+    reentry_event_id BIGINT REFERENCES attendance_events(id) ON DELETE SET NULL,
+    exited_at TIMESTAMPTZ NOT NULL,
+    reentered_at TIMESTAMPTZ,
+    reason_code TEXT,
+    admin_note TEXT,
+    counts_as_work BOOLEAN,
+    classified_by TEXT,
+    classified_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_attendance_intervals_day ON attendance_intervals(attendance_day_id,exited_at)`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_intervals_open ON attendance_intervals(attendance_day_id) WHERE reentered_at IS NULL`;
+
   await sql`CREATE TABLE IF NOT EXISTS app_users (
     id BIGSERIAL PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,

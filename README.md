@@ -50,3 +50,7 @@ Se incorpora un módulo Legajos para consultar por agente su situación, antigü
 
 ## V1.20
 Generación masiva de PIN provisorios para agentes activos sin PIN, con vencimiento a 7 días, cambio obligatorio en primer uso y exportación CSV de entrega única.
+
+
+## V1.21
+Se incorpora secuencia de movimientos múltiples por jornada: Entrada → Salida → Reingreso → Salida. Las salidas intermedias quedan pendientes de clasificación por Administración, que puede asignar motivo, observación y definir si el intervalo computa como tiempo trabajado. El legajo muestra la secuencia completa.

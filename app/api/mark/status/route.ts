@@ -29,8 +29,13 @@ export async function POST(request:Request){
   if(!ctx.schedule)return NextResponse.json({error:"Según el horario registrado, hoy no corresponde prestación en la oficina."},{status:409});
   if(ctx.leave)return NextResponse.json({error:`Hoy figura ${leaveLabels[String(ctx.leave.leave_type)]||"una novedad administrativa"}. No corresponde realizar marcación.`},{status:409});
   const attendance = (ctx.attendance ?? null) as AttendanceSnapshot | null;
-  let action:"ENTRY"|"EXIT"|"DONE"="ENTRY";let lastMark:string|null=null;
-  if(attendance && attendance.entry_at && !attendance.exit_at){action="EXIT";lastMark=`Entrada ${new Intl.DateTimeFormat("es-AR",{timeZone:"America/Argentina/Buenos_Aires",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(attendance.entry_at))}`;}
-  else if(attendance && attendance.entry_at && attendance.exit_at){action="DONE";lastMark=`Salida ${new Intl.DateTimeFormat("es-AR",{timeZone:"America/Argentina/Buenos_Aires",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(attendance.exit_at))}${attendance.exit_type==="AUTO"?" · cierre automático":""}`;}
+  let action:"ENTRY"|"EXIT"|"REENTRY"|"DONE"="ENTRY";let lastMark:string|null=null;
+  const fmt=(v:any)=>new Intl.DateTimeFormat("es-AR",{timeZone:"America/Argentina/Buenos_Aires",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(v));
+  if(attendance?.entry_at){
+    const lastType=String(ctx.lastEvent?.event_type||"");
+    if(lastType==="ENTRY"||lastType==="REENTRY"){action="EXIT";lastMark=`${lastType==="REENTRY"?"Reingreso":"Entrada"} ${fmt(ctx.lastEvent?.occurred_at||attendance.entry_at)}`;}
+    else if(lastType==="EXIT"){action="REENTRY";lastMark=`Salida ${fmt(ctx.lastEvent?.occurred_at||attendance.exit_at)}`;}
+    else if(lastType==="AUTO_EXIT"){action="DONE";lastMark=`Salida ${fmt(ctx.lastEvent?.occurred_at||attendance.exit_at)} · cierre automático`;}
+  }
   return NextResponse.json({employee:{id:employee.id,name:`${employee.last_name}, ${employee.first_name}`,dni:employee.dni},deviceBoundNow:device.boundNow,mustChangePin:Boolean(employee.force_pin_change),schedule:`${String(ctx.schedule.start_time).slice(0,5)}–${String(ctx.schedule.end_time).slice(0,5)}`,action,lastMark,lateMinutes:Number(attendance?.late_minutes||0)});
 }

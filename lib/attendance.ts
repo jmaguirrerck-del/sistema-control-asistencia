@@ -65,6 +65,7 @@ export async function todayEmployeeContext(employeeId: string): Promise<{
   schedule: Record<string, any> | null;
   leave: Record<string, any> | null;
   attendance: Record<string, any> | null;
+  lastEvent: Record<string, any> | null;
 }> {
   const sql = db();
   const p = argentinaParts();
@@ -75,7 +76,7 @@ export async function todayEmployeeContext(employeeId: string): Promise<{
     LIMIT 1
   `;
   const schedule = scheduleRows[0] || null;
-  if (!schedule) return { date: p.date, weekday: p.weekday, schedule: null, leave: null, attendance: null };
+  if (!schedule) return { date: p.date, weekday: p.weekday, schedule: null, leave: null, attendance: null, lastEvent: null };
 
   const leaveRows = await sql`
     SELECT id, leave_type, date_from::text, date_to::text, observation
@@ -94,13 +95,19 @@ export async function todayEmployeeContext(employeeId: string): Promise<{
     WHERE employee_id = ${employeeId} AND work_date = ${p.date}::date
     LIMIT 1
   `;
-  return {
-    date: p.date,
-    weekday: p.weekday,
-    schedule,
-    leave: leaveRows[0] || null,
-    attendance: attendanceRows[0] || null,
-  };
+  const attendance = attendanceRows[0] || null;
+  let lastEvent: Record<string, any> | null = null;
+  if (attendance?.id) {
+    const events = await sql`
+      SELECT id,event_type,occurred_at
+      FROM attendance_events
+      WHERE attendance_day_id=${attendance.id}
+        AND event_type IN ('ENTRY','EXIT','REENTRY','AUTO_EXIT')
+      ORDER BY occurred_at DESC,id DESC LIMIT 1
+    `;
+    lastEvent = events[0] || null;
+  }
+  return { date: p.date, weekday: p.weekday, schedule, leave: leaveRows[0] || null, attendance, lastEvent };
 }
 
 export async function registerEntry(params: { employeeId: string; location: LocationInput; distance: number }) {
@@ -144,7 +151,7 @@ export async function registerExit(params: { employeeId: string; location: Locat
   const context = await todayEmployeeContext(params.employeeId);
   const current = context.attendance;
   if (!current?.entry_at) throw new Error("NO_ENTRY");
-  if (current.exit_at) throw new Error("EXIT_EXISTS");
+  if (!context.lastEvent || !['ENTRY','REENTRY'].includes(String(context.lastEvent.event_type))) throw new Error("EXIT_EXISTS");
 
   const scheduledEnd = String(current.scheduled_end).slice(0, 5);
   const diffAfterEnd = minutesDifferenceFromSchedule(scheduledEnd);
@@ -166,16 +173,53 @@ export async function registerExit(params: { employeeId: string; location: Locat
         pending_minutes = ${pending},
         exit_type = 'EMPLOYEE',
         updated_at = now()
-    WHERE id = ${current.id} AND exit_at IS NULL
+    WHERE id = ${current.id}
     RETURNING id, entry_at, exit_at, late_minutes, early_minutes, compensation_minutes, pending_minutes, exit_type
   `;
-  if (!rows[0]) throw new Error("EXIT_EXISTS");
   const day = rows[0];
-  await sql`
+  const ev = await sql`
     INSERT INTO attendance_events(attendance_day_id, employee_id, event_type, latitude, longitude, accuracy, distance_meters)
     VALUES (${day.id}, ${params.employeeId}, 'EXIT', ${params.location.lat}, ${params.location.lng}, ${params.location.accuracy || null}, ${params.distance})
+    RETURNING id,occurred_at
+  `;
+  await sql`
+    INSERT INTO attendance_intervals(attendance_day_id,employee_id,exit_event_id,exited_at)
+    VALUES (${day.id},${params.employeeId},${ev[0].id},${ev[0].occurred_at})
   `;
   return day;
+}
+
+export async function registerReentry(params: { employeeId: string; location: LocationInput; distance: number }) {
+  const sql = db();
+  const context = await todayEmployeeContext(params.employeeId);
+  const current = context.attendance;
+  if (!current?.entry_at) throw new Error("NO_ENTRY");
+  if (!context.lastEvent || String(context.lastEvent.event_type)!=='EXIT') throw new Error("REENTRY_NOT_ALLOWED");
+  const open=(await sql`
+    SELECT id FROM attendance_intervals
+    WHERE attendance_day_id=${current.id} AND reentered_at IS NULL
+    ORDER BY exited_at DESC LIMIT 1
+  `)[0];
+  if(!open) throw new Error("REENTRY_NOT_ALLOWED");
+  const ev=await sql`
+    INSERT INTO attendance_events(attendance_day_id, employee_id, event_type, latitude, longitude, accuracy, distance_meters)
+    VALUES (${current.id}, ${params.employeeId}, 'REENTRY', ${params.location.lat}, ${params.location.lng}, ${params.location.accuracy || null}, ${params.distance})
+    RETURNING id,occurred_at
+  `;
+  await sql`
+    UPDATE attendance_intervals
+    SET reentry_event_id=${ev[0].id},reentered_at=${ev[0].occurred_at},updated_at=now()
+    WHERE id=${open.id}
+  `;
+  // La jornada vuelve a quedar abierta. La próxima salida será la última salida conocida
+  // hasta que exista otro reingreso. El intervalo cerrado queda pendiente de clasificación administrativa.
+  await sql`
+    UPDATE attendance_days
+    SET exit_at=NULL,exit_latitude=NULL,exit_longitude=NULL,exit_accuracy=NULL,exit_distance_meters=NULL,
+        early_minutes=0,compensation_minutes=0,pending_minutes=late_minutes,exit_type=NULL,updated_at=now()
+    WHERE id=${current.id}
+  `;
+  return {id:current.id,reentry_at:ev[0].occurred_at,late_minutes:Number(current.late_minutes||0)};
 }
 
 export async function autoCloseEligibleDays() {
@@ -190,6 +234,9 @@ export async function autoCloseEligibleDays() {
   `;
   let closed = 0;
   for (const row of rows) {
+    const last=(await sql`SELECT event_type FROM attendance_events WHERE attendance_day_id=${row.id} AND event_type IN ('ENTRY','EXIT','REENTRY','AUTO_EXIT') ORDER BY occurred_at DESC,id DESC LIMIT 1`)[0];
+    // Si el último movimiento ya fue una salida, la jornada está cerrada por el propio agente.
+    if(last?.event_type==='EXIT'||last?.event_type==='AUTO_EXIT') continue;
     const workDate = String(row.work_date).slice(0, 10);
     const end = String(row.scheduled_end).slice(0, 5);
     const dueMinutes = minutesFromHHMM(end) + Number(row.late_minutes || 0) + grace;
@@ -213,8 +260,8 @@ export async function autoCloseEligibleDays() {
     if (updated[0]) {
       closed += 1;
       await sql`
-        INSERT INTO attendance_events(attendance_day_id, employee_id, event_type, metadata)
-        VALUES (${row.id}, ${row.employee_id}, 'AUTO_EXIT', ${JSON.stringify({
+        INSERT INTO attendance_events(attendance_day_id, employee_id, event_type, occurred_at, metadata)
+        VALUES (${row.id}, ${row.employee_id}, 'AUTO_EXIT', ${theoreticalExitIso}::timestamptz, ${JSON.stringify({
           theoreticalExit: theoreticalExitIso,
           graceMinutes: grace,
           lateMinutes: Number(row.late_minutes || 0),

@@ -21,7 +21,7 @@ export async function POST(request:Request){
   if(!geo.ok)return NextResponse.json({error:"La ubicación está fuera del área autorizada."},{status:403});
   const employee=await findEmployeeByPin(currentPin);
   if(!employee)return NextResponse.json({error:"El PIN actual es incorrecto."},{status:401});
-  const device=await checkDevice(String(employee.id),true,b.deviceKey,b.deviceSignature);
+  const device=await checkDevice(String(employee.id),true,b.deviceKey,b.deviceSignature,b.deviceRecoverySignature);
   if(!device.ok)return NextResponse.json({error:device.reason==="DEVICE_USED_BY_OTHER"?"Este dispositivo está vinculado a otro agente.":"Existe otro dispositivo autorizado para este agente."},{status:403});
   const sql=db();
   const lookup=await pinLookup(newPin);

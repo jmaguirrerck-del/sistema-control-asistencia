@@ -9,6 +9,7 @@ type Success = { kind:"ENTRY"|"EXIT"; name:string; serverTime:string; entry?:str
 export default function MarkClient({ token }: { token: string }){
   const [deviceKey,setDeviceKey]=useState("");
   const [deviceSignature,setDeviceSignature]=useState("");
+  const [deviceRecoverySignature,setDeviceRecoverySignature]=useState("");
   const [loc,setLoc]=useState<Location|null>(null); const [geoState,setGeoState]=useState<"idle"|"checking"|"valid"|"bad">("idle");
   const [geoMsg,setGeoMsg]=useState(""); const [pin,setPin]=useState(""); const [status,setStatus]=useState<Status|null>(null); const [success,setSuccess]=useState<Success|null>(null); const [busy,setBusy]=useState(false); const [error,setError]=useState("");
   const [changePinMode,setChangePinMode]=useState(false); const [newPin,setNewPin]=useState(""); const [repeatPin,setRepeatPin]=useState(""); const [pinMessage,setPinMessage]=useState("");
@@ -39,10 +40,24 @@ export default function MarkClient({ token }: { token: string }){
         String(nav.deviceMemory||0)
       ].join("|");
       setDeviceSignature(signature);
+
+      // Perfil tolerante: usa dimensiones físicas aproximadas y evita datos que
+      // Chrome/Android pueden variar entre sesiones (RAM, núcleos, idioma, DPR aislado).
+      const dpr=window.devicePixelRatio||1;
+      const physicalMin=Math.round((screenMin*dpr)/50)*50;
+      const physicalMax=Math.round((screenMax*dpr)/50)*50;
+      const recoverySignature=[
+        nav.platform||"",
+        Intl.DateTimeFormat().resolvedOptions().timeZone||"",
+        `${physicalMin}x${physicalMax}`,
+        String(nav.maxTouchPoints||0)
+      ].join("|");
+      setDeviceRecoverySignature(recoverySignature);
     }catch{
       // Server keeps a cookie fallback if browser storage/capabilities are unavailable.
       setDeviceKey("");
       setDeviceSignature("");
+      setDeviceRecoverySignature("");
     }
     if(!token){setGeoState("bad");setGeoMsg("El QR no contiene un token válido.");return;}
     verifyLocation();
@@ -62,20 +77,20 @@ export default function MarkClient({ token }: { token: string }){
   }
 
   async function identify(e:FormEvent){e.preventDefault(); if(!loc)return;setBusy(true);setError("");
-    const r=await fetch("/api/mark/status",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,pin,deviceKey,deviceSignature})});const b=await r.json().catch(()=>({}));setBusy(false);if(!r.ok){setError(b.error||"No se pudo identificar al agente.");return;}setStatus(b);setChangePinMode(Boolean(b.mustChangePin));setPinMessage("");
+    const r=await fetch("/api/mark/status",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,pin,deviceKey,deviceSignature,deviceRecoverySignature})});const b=await r.json().catch(()=>({}));setBusy(false);if(!r.ok){setError(b.error||"No se pudo identificar al agente.");return;}setStatus(b);setChangePinMode(Boolean(b.mustChangePin));setPinMessage("");
   }
 
   async function changePin(e:FormEvent){e.preventDefault();if(!loc||!status)return;setPinMessage("");setError("");
     if(!/^\d{4,8}$/.test(newPin)){setError("El nuevo PIN debe tener entre 4 y 8 dígitos.");return;}
     if(newPin!==repeatPin){setError("Los nuevos PIN no coinciden.");return;}
     setBusy(true);
-    const r=await fetch("/api/mark/change-pin",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,currentPin:pin,newPin,deviceKey,deviceSignature})});
+    const r=await fetch("/api/mark/change-pin",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,currentPin:pin,newPin,deviceKey,deviceSignature,deviceRecoverySignature})});
     const b=await r.json().catch(()=>({}));setBusy(false);
     if(!r.ok){setError(b.error||"No se pudo cambiar el PIN.");return;}
     setPin(newPin);setNewPin("");setRepeatPin("");setChangePinMode(false);setStatus({...status,mustChangePin:false});setPinMessage("PIN actualizado correctamente. Ya podés continuar con la marcación.");
   }
 
-  async function mark(){if(!loc||!status)return;setBusy(true);setError("");const r=await fetch("/api/mark/submit",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,pin,action:status.action,deviceKey,deviceSignature})});const b=await r.json().catch(()=>({}));setBusy(false);if(!r.ok){setError(b.error||"No se pudo registrar la marcación.");return;}setSuccess(b);}
+  async function mark(){if(!loc||!status)return;setBusy(true);setError("");const r=await fetch("/api/mark/submit",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token,location:loc,pin,action:status.action,deviceKey,deviceSignature,deviceRecoverySignature})});const b=await r.json().catch(()=>({}));setBusy(false);if(!r.ok){setError(b.error||"No se pudo registrar la marcación.");return;}setSuccess(b);}
 
   if(success)return <main className="mark-shell"><div className="mark-card stack" style={{textAlign:"center"}}><div className="status-icon good">✓</div><h1 className="mark-title">{success.kind==="ENTRY"?"ENTRADA REGISTRADA CORRECTAMENTE":"SALIDA REGISTRADA CORRECTAMENTE"}</h1><div className="mark-time">{success.serverTime}</div><strong>{success.name}</strong><div className="notice good">Ubicación verificada · registro guardado en el servidor</div>{success.kind==="ENTRY"?<div className="muted">Próxima acción: registrar salida al finalizar la jornada.</div>:<div className="grid grid-2" style={{textAlign:"left"}}><div className="kpi info"><div className="kpi-label">Compensación</div><div className="kpi-value">{success.compensationMinutes||0} min</div></div><div className="kpi info"><div className="kpi-label">Saldo pendiente</div><div className="kpi-value">{success.pendingMinutes||0} min</div></div></div>}<button className="btn btn-secondary" onClick={()=>window.location.reload()}>Finalizar</button></div></main>;
 

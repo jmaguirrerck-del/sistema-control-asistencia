@@ -169,6 +169,10 @@ export async function initializeDatabase() {
       revoked_at TIMESTAMPTZ
     )
   `;
+  await sql`ALTER TABLE employee_devices ADD COLUMN IF NOT EXISTS device_family_hash TEXT`;
+  await sql`ALTER TABLE employee_devices ADD COLUMN IF NOT EXISTS device_recovery_hash TEXT`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_employee_devices_family ON employee_devices(device_family_hash) WHERE active=TRUE`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_employee_devices_recovery ON employee_devices(device_recovery_hash) WHERE active=TRUE`;
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_one_active_device ON employee_devices(employee_id) WHERE active=TRUE`;
   await sql`CREATE INDEX IF NOT EXISTS idx_employee_devices_employee ON employee_devices(employee_id)`;
 

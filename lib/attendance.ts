@@ -118,9 +118,10 @@ export async function registerEntry(params: { employeeId: string; location: Loca
   if (context.attendance?.entry_at) throw new Error("ENTRY_EXISTS");
 
   const settings = await getOfficeSettings();
-  const tolerance = Number(settings?.lateness_tolerance_minutes || 10);
+  const tolerance = Number(settings?.lateness_tolerance_minutes || 15);
   const rawLate = Math.max(0, minutesDifferenceFromSchedule(String(context.schedule.start_time).slice(0, 5)));
-  const lateMinutes = rawLate > tolerance ? rawLate - tolerance : 0;
+  // Hasta la tolerancia no hay atraso. Si se supera, se computa el total desde la hora prevista.
+  const lateMinutes = rawLate > tolerance ? rawLate : 0;
 
   const rows = await sql`
     INSERT INTO attendance_days(

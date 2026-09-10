@@ -26,7 +26,7 @@ export default function AdminLoginPage() {
       return;
     }
     const body = await res.json().catch(() => ({}));
-    router.push(body.role === "LICENSE_OPERATOR" ? "/admin/novedades" : "/admin");
+    router.push(body.role === "LICENSE_OPERATOR" ? "/admin/novedades" : body.role === "ATTENDANCE_OPERATOR" ? "/admin/registros" : "/admin");
     router.refresh();
   }
 

@@ -1,3 +1,7 @@
+## V1.22
+
+Marcación manual excepcional, nuevo rol Operador de Asistencia y tolerancia de tardanza de 15 minutos con cómputo total al excederla.
+
 # Sistema de Control de Asistencia DGE · V1.9
 
 Aplicación institucional para la Dirección de Gestión Escolar.

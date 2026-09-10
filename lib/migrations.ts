@@ -32,6 +32,8 @@ export async function ensureV13Schema(){
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS temporary_pin_expires_at TIMESTAMPTZ`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS seniority_date DATE`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS seniority_notes TEXT`;
+  // V1.22: tolerancia oficial de ingreso fijada en 15 minutos.
+  await sql`UPDATE office_settings SET lateness_tolerance_minutes=15,updated_at=now() WHERE id=1 AND lateness_tolerance_minutes<>15`;
   await sql`CREATE TABLE IF NOT EXISTS employee_devices (
     id BIGSERIAL PRIMARY KEY, employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     device_hash TEXT NOT NULL UNIQUE, user_agent TEXT, active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -80,13 +82,25 @@ export async function ensureV13Schema(){
     id BIGSERIAL PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK(role IN ('ADMIN','LICENSE_OPERATOR')),
+    role TEXT NOT NULL CHECK(role IN ('ADMIN','LICENSE_OPERATOR','ATTENDANCE_OPERATOR')),
     active BOOLEAN NOT NULL DEFAULT TRUE,
     created_by TEXT,
     last_login_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`;
+  // V1.22: nuevo rol restringido para registrar marcaciones excepcionales.
+  await sql`DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname='app_users_role_check') THEN
+      ALTER TABLE app_users DROP CONSTRAINT app_users_role_check;
+    END IF;
+  END $$`;
+  await sql`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='app_users_role_v122_chk') THEN
+      ALTER TABLE app_users ADD CONSTRAINT app_users_role_v122_chk
+      CHECK(role IN ('ADMIN','LICENSE_OPERATOR','ATTENDANCE_OPERATOR'));
+    END IF;
+  END $$`;
 
   await sql`CREATE TABLE IF NOT EXISTS vacation_entitlements (
     id BIGSERIAL PRIMARY KEY,

@@ -1,21 +1,38 @@
 import { NextResponse } from "next/server";
-import { getAdminSession, isAdmin } from "@/lib/auth";
+import { getAdminSession, isAdmin, canManageAttendance } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { ensureV13Schema } from "@/lib/migrations";
 
 const reasons=new Set(["PERSONAL","MEDICAL","COMMISSION","AUTHORIZED_PERMISSION","LEAVE_HOURS","UNJUSTIFIED","OTHER"]);
+const manualReasons=new Set(["BROKEN_PHONE","DEVICE_PROBLEM","SYSTEM_FAILURE","OTHER"]);
+const movementTypes=new Set(["ENTRY","EXIT","REENTRY"]);
+
+function validDate(v:string){return /^\d{4}-\d{2}-\d{2}$/.test(v)}
+function validTime(v:string){return /^([01]\d|2[0-3]):[0-5]\d$/.test(v)}
+function minutes(v:string){const [h,m]=v.slice(0,5).split(":").map(Number);return h*60+m}
 
 export async function GET(request:Request){
   await ensureV13Schema();
-  const session=await getAdminSession();if(!isAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
-  const url=new URL(request.url);const date=url.searchParams.get("date");if(!date||!/^\d{4}-\d{2}-\d{2}$/.test(date))return NextResponse.json({error:"Fecha inválida"},{status:400});
+  const session=await getAdminSession();if(!canManageAttendance(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  const url=new URL(request.url);
+  if(url.searchParams.get("employees")==="1"){
+    const sql=db();
+    const employees=await sql`SELECT id,last_name,first_name,dni,employment FROM employees WHERE active=TRUE ORDER BY last_name,first_name`;
+    return NextResponse.json(employees);
+  }
+  const date=url.searchParams.get("date");if(!date||!validDate(date))return NextResponse.json({error:"Fecha inválida"},{status:400});
   const sql=db();const rows=await sql`
     SELECT ad.id,e.last_name,e.first_name,e.dni,ad.scheduled_start::text,ad.scheduled_end::text,
       to_char(ad.entry_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI') AS entry_local,
       to_char(ad.exit_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI') AS exit_local,
       ad.late_minutes,ad.compensation_minutes,ad.pending_minutes,ad.exit_type,
-      COALESCE((SELECT json_agg(json_build_object('id',ae.id,'event_type',ae.event_type,'time',to_char(ae.occurred_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI')) ORDER BY ae.occurred_at,ae.id)
+      COALESCE((SELECT json_agg(json_build_object(
+        'id',ae.id,'event_type',ae.event_type,
+        'time',to_char(ae.occurred_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI'),
+        'manual',COALESCE((ae.metadata->>'manual')::boolean,false),
+        'manual_reason',ae.metadata->>'manualReason','actor',ae.metadata->>'actor'
+      ) ORDER BY ae.occurred_at,ae.id)
         FROM attendance_events ae WHERE ae.attendance_day_id=ad.id AND ae.event_type IN ('ENTRY','EXIT','REENTRY','AUTO_EXIT')),'[]'::json) AS movements,
       COALESCE((SELECT json_agg(json_build_object(
         'id',ai.id,
@@ -28,6 +45,59 @@ export async function GET(request:Request){
     FROM attendance_days ad JOIN employees e ON e.id=ad.employee_id
     WHERE ad.work_date=${date}::date ORDER BY e.last_name,e.first_name
   `;return NextResponse.json(rows);
+}
+
+export async function POST(request:Request){
+  await ensureV13Schema();
+  const session=await getAdminSession();if(!canManageAttendance(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  const body=await request.json().catch(()=>({}));
+  const employeeId=String(body.employeeId||"");const date=String(body.date||"");const time=String(body.time||"");
+  const eventType=String(body.eventType||"");const manualReason=String(body.manualReason||"");const note=String(body.note||"").trim().slice(0,500);
+  if(!employeeId||!validDate(date)||!validTime(time)||!movementTypes.has(eventType)||!manualReasons.has(manualReason))return NextResponse.json({error:"Complete agente, fecha, hora, movimiento y motivo."},{status:400});
+  if(manualReason==="OTHER"&&!note)return NextResponse.json({error:"Para 'Otra causa' debe ingresar una observación."},{status:400});
+  const sql=db();
+  const employee=(await sql`SELECT id,last_name,first_name,dni,active FROM employees WHERE id=${employeeId} LIMIT 1`)[0];
+  if(!employee||!employee.active)return NextResponse.json({error:"Agente inexistente o inactivo."},{status:404});
+  const schedule=(await sql`
+    SELECT start_time::text,end_time::text FROM employee_schedules
+    WHERE employee_id=${employeeId} AND weekday=(EXTRACT(ISODOW FROM ${date}::date))::int LIMIT 1
+  `)[0];
+  if(!schedule)return NextResponse.json({error:"El agente no tiene horario registrado para esa fecha."},{status:409});
+  const occurred=`${date} ${time}:00`;
+  let day=(await sql`SELECT * FROM attendance_days WHERE employee_id=${employeeId} AND work_date=${date}::date LIMIT 1`)[0]||null;
+  const last=day?(await sql`SELECT id,event_type,occurred_at FROM attendance_events WHERE attendance_day_id=${day.id} AND event_type IN ('ENTRY','EXIT','REENTRY','AUTO_EXIT') ORDER BY occurred_at DESC,id DESC LIMIT 1`)[0]:null;
+  const metadata=JSON.stringify({manual:true,manualReason,actor:session!.email,note:note||null});
+
+  if(eventType==="ENTRY"){
+    if(day?.entry_at)return NextResponse.json({error:"La jornada ya tiene una entrada registrada."},{status:409});
+    const start=String(schedule.start_time).slice(0,5);const raw=Math.max(0,minutes(time)-minutes(start));
+    // Regla DGE: hasta 15 min no hay atraso; si se supera, se computa el total desde la hora prevista.
+    const late=raw>15?raw:0;
+    if(!day){
+      day=(await sql`INSERT INTO attendance_days(employee_id,work_date,scheduled_start,scheduled_end,entry_at,late_minutes,pending_minutes,admin_note)
+        VALUES(${employeeId},${date}::date,${start}::time,${String(schedule.end_time).slice(0,5)}::time,(${occurred}::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'),${late},${late},${`Marcación manual: ${manualReason}${note?` - ${note}`:""}`}) RETURNING *`)[0];
+    }else{
+      day=(await sql`UPDATE attendance_days SET entry_at=(${occurred}::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'),late_minutes=${late},pending_minutes=${late},admin_note=${`Marcación manual: ${manualReason}${note?` - ${note}`:""}`},updated_at=now() WHERE id=${day.id} RETURNING *`)[0];
+    }
+    await sql`INSERT INTO attendance_events(attendance_day_id,employee_id,event_type,occurred_at,metadata) VALUES(${day.id},${employeeId},'ENTRY',(${occurred}::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'),${metadata}::jsonb)`;
+  } else if(eventType==="EXIT"){
+    if(!day?.entry_at)return NextResponse.json({error:"No puede registrar una salida sin una entrada previa."},{status:409});
+    if(!last||!["ENTRY","REENTRY"].includes(String(last.event_type)))return NextResponse.json({error:"La secuencia actual no admite una salida."},{status:409});
+    const end=String(day.scheduled_end).slice(0,5);const after=Math.max(0,minutes(time)-minutes(end));const early=Math.max(0,minutes(end)-minutes(time));const late=Number(day.late_minutes||0);const comp=Math.min(late,after);const pending=Math.max(0,late-comp)+early;
+    day=(await sql`UPDATE attendance_days SET exit_at=(${occurred}::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'),early_minutes=${early},compensation_minutes=${comp},pending_minutes=${pending},exit_type='ADMIN',admin_note=${`Marcación manual: ${manualReason}${note?` - ${note}`:""}`},updated_at=now() WHERE id=${day.id} RETURNING *`)[0];
+    const ev=(await sql`INSERT INTO attendance_events(attendance_day_id,employee_id,event_type,occurred_at,metadata) VALUES(${day.id},${employeeId},'EXIT',(${occurred}::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'),${metadata}::jsonb) RETURNING id,occurred_at`)[0];
+    await sql`INSERT INTO attendance_intervals(attendance_day_id,employee_id,exit_event_id,exited_at) VALUES(${day.id},${employeeId},${ev.id},${ev.occurred_at})`;
+  } else {
+    if(!day?.entry_at)return NextResponse.json({error:"No puede registrar un reingreso sin una entrada previa."},{status:409});
+    if(!last||String(last.event_type)!=="EXIT")return NextResponse.json({error:"La secuencia actual no admite un reingreso."},{status:409});
+    const open=(await sql`SELECT id FROM attendance_intervals WHERE attendance_day_id=${day.id} AND reentered_at IS NULL ORDER BY exited_at DESC LIMIT 1`)[0];
+    if(!open)return NextResponse.json({error:"No hay una salida abierta para asociar al reingreso."},{status:409});
+    const ev=(await sql`INSERT INTO attendance_events(attendance_day_id,employee_id,event_type,occurred_at,metadata) VALUES(${day.id},${employeeId},'REENTRY',(${occurred}::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'),${metadata}::jsonb) RETURNING id,occurred_at`)[0];
+    await sql`UPDATE attendance_intervals SET reentry_event_id=${ev.id},reentered_at=${ev.occurred_at},updated_at=now() WHERE id=${open.id}`;
+    await sql`UPDATE attendance_days SET exit_at=NULL,exit_latitude=NULL,exit_longitude=NULL,exit_accuracy=NULL,exit_distance_meters=NULL,early_minutes=0,compensation_minutes=0,pending_minutes=late_minutes,exit_type=NULL,admin_note=${`Marcación manual: ${manualReason}${note?` - ${note}`:""}`},updated_at=now() WHERE id=${day.id}`;
+  }
+  await writeAudit({actor:session!.email,action:"MANUAL_ATTENDANCE_MOVEMENT",entityType:"attendance_day",entityId:String(day.id),next:{employeeId,date,time,eventType,manualReason,note}});
+  return NextResponse.json({ok:true,id:day.id});
 }
 
 export async function PATCH(request:Request){

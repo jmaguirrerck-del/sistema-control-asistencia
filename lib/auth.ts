@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 
 const COOKIE_NAME = "dge_admin_session";
-export type AppRole = "ADMIN" | "LICENSE_OPERATOR";
+export type AppRole = "ADMIN" | "LICENSE_OPERATOR" | "ATTENDANCE_OPERATOR";
 
 function authKey() {
   const secret = process.env.AUTH_SECRET;
@@ -29,7 +29,7 @@ export async function getAdminSession() {
   try {
     const store = await cookies(); const token = store.get(COOKIE_NAME)?.value; if (!token) return null;
     const { payload } = await jwtVerify(token, authKey());
-    if ((payload.role !== "ADMIN" && payload.role !== "LICENSE_OPERATOR") || typeof payload.email !== "string") return null;
+    if ((payload.role !== "ADMIN" && payload.role !== "LICENSE_OPERATOR" && payload.role !== "ATTENDANCE_OPERATOR") || typeof payload.email !== "string") return null;
     return { email:payload.email, role:payload.role as AppRole, userId: typeof payload.userId === "number" ? payload.userId : null };
   } catch { return null; }
 }
@@ -38,6 +38,7 @@ type Session = Awaited<ReturnType<typeof getAdminSession>>;
 type NonNullSession = NonNullable<Session>;
 export function isAdmin(session: Session): session is NonNullSession & { role: "ADMIN" } { return session?.role === "ADMIN"; }
 export function canManageLicenses(session: Session): session is NonNullSession { return Boolean(session && (session.role === "ADMIN" || session.role === "LICENSE_OPERATOR")); }
+export function canManageAttendance(session: Session): session is NonNullSession { return Boolean(session && (session.role === "ADMIN" || session.role === "ATTENDANCE_OPERATOR")); }
 
 export async function authenticateUser(email: string, password: string): Promise<{email:string;role:AppRole;userId:number|null}|null> {
   const normalized=email.trim().toLowerCase();
@@ -46,7 +47,7 @@ export async function authenticateUser(email: string, password: string): Promise
   try {
     const sql=db();
     const row=(await sql`SELECT id,email,password_hash,role,active FROM app_users WHERE lower(email)=lower(${normalized}) LIMIT 1`)[0];
-    if(!row || !row.active || (row.role!=="ADMIN" && row.role!=="LICENSE_OPERATOR")) return null;
+    if(!row || !row.active || (row.role!=="ADMIN" && row.role!=="LICENSE_OPERATOR" && row.role!=="ATTENDANCE_OPERATOR")) return null;
     if(!(await bcrypt.compare(password,String(row.password_hash)))) return null;
     await sql`UPDATE app_users SET last_login_at=now(),updated_at=now() WHERE id=${Number(row.id)}`;
     return {email:String(row.email),role:row.role as AppRole,userId:Number(row.id)};

@@ -15,7 +15,7 @@ export async function POST(req:Request){
   const b=await req.json().catch(()=>({})); const email=String(b.email||"").trim().toLowerCase(), password=String(b.password||""), role=String(b.role||"LICENSE_OPERATOR");
   if(!/^\S+@\S+\.\S+$/.test(email))return NextResponse.json({error:"Correo inválido"},{status:400});
   if(password.length<8)return NextResponse.json({error:"La contraseña debe tener al menos 8 caracteres"},{status:400});
-  if(role!=="LICENSE_OPERATOR"&&role!=="ADMIN")return NextResponse.json({error:"Rol inválido"},{status:400});
+  if(role!=="LICENSE_OPERATOR"&&role!=="ATTENDANCE_OPERATOR"&&role!=="ADMIN")return NextResponse.json({error:"Rol inválido"},{status:400});
   const sql=db(); const dup=await sql`SELECT id FROM app_users WHERE lower(email)=lower(${email}) LIMIT 1`; if(dup[0])return NextResponse.json({error:"Ya existe un usuario con ese correo"},{status:409});
   const hash=await bcrypt.hash(password,12); const row=(await sql`INSERT INTO app_users(email,password_hash,role,created_by) VALUES(${email},${hash},${role},${s!.email}) RETURNING id`)[0];
   await writeAudit({actor:s!.email,action:"CREATE_APP_USER",entityType:"app_user",entityId:String(row.id),next:{email,role}});

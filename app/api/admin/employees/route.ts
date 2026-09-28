@@ -30,7 +30,7 @@ export async function GET(request:Request){
 }
 
 export async function POST(request:Request){
-  await ensureV13Schema(); const session=await getAdminSession(); if(!canManagePersonnel(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureV13Schema(); const session=await getAdminSession(); if(!session||!canManagePersonnel(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const b=await request.json().catch(()=>({})); const lastName=String(b.lastName||"").trim().slice(0,100),firstName=String(b.firstName||"").trim().slice(0,100),dni=String(b.dni||"").replace(/\D/g,"").slice(0,12),employment=String(b.employment||"").trim().slice(0,120),seniorityDate=String(b.seniorityDate||"").trim(),seniorityNotes=String(b.seniorityNotes||"").trim().slice(0,500),pin=String(b.pin||""); const schedules=parseSchedules(b.schedules);
   if(!lastName||!firstName||dni.length<6||!employment)return NextResponse.json({error:"Completá apellido, nombre, DNI y situación de revista."},{status:400}); if(pin&&!/^\d{4,8}$/.test(pin))return NextResponse.json({error:"El PIN debe tener entre 4 y 8 dígitos."},{status:400});
   let officeId=session!.officeId; if(isGeneralAdmin(session)){officeId=Number(b.officeId);if(!Number.isInteger(officeId)||Number(officeId)<1)return NextResponse.json({error:"Seleccioná la oficina del agente."},{status:400});}

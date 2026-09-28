@@ -55,15 +55,15 @@ type Session = Awaited<ReturnType<typeof getAdminSession>>;
 type NonNullSession = NonNullable<Session>;
 export function isGeneralAdmin(session: Session): boolean { return Boolean(session?.generalAdmin); }
 // Compatibilidad: donde históricamente se pedía ADMIN, ahora significa administrador general.
-export function isAdmin(session: Session): session is NonNullSession { return isGeneralAdmin(session); }
-export function hasPermission(session: Session, permission: AppPermission): session is NonNullSession {
+export function isAdmin(session: Session): boolean { return isGeneralAdmin(session); }
+export function hasPermission(session: Session, permission: AppPermission): boolean {
   return Boolean(session && (session.generalAdmin || session.permissions?.includes(permission)));
 }
-export function canManageLicenses(session: Session): session is NonNullSession { return hasPermission(session,"LICENSES"); }
-export function canManageAttendance(session: Session): session is NonNullSession { return hasPermission(session,"ATTENDANCE"); }
-export function canManagePersonnel(session: Session): session is NonNullSession { return hasPermission(session,"PERSONNEL"); }
-export function canViewDashboard(session: Session): session is NonNullSession { return hasPermission(session,"DASHBOARD"); }
-export function canViewLegajos(session: Session): session is NonNullSession { return hasPermission(session,"LEGAJOS"); }
+export function canManageLicenses(session: Session): boolean { return hasPermission(session,"LICENSES"); }
+export function canManageAttendance(session: Session): boolean { return hasPermission(session,"ATTENDANCE"); }
+export function canManagePersonnel(session: Session): boolean { return hasPermission(session,"PERSONNEL"); }
+export function canViewDashboard(session: Session): boolean { return hasPermission(session,"DASHBOARD"); }
+export function canViewLegajos(session: Session): boolean { return hasPermission(session,"LEGAJOS"); }
 
 export async function authenticateUser(email: string, password: string): Promise<{email:string;role:AppRole;userId:number|null;permissions:AppPermission[];mustChangePassword:boolean;officeId:number|null;generalAdmin:boolean}|null> {
   const normalized=email.trim().toLowerCase();

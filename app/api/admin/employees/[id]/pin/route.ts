@@ -8,7 +8,7 @@ import { ensureV13Schema } from "@/lib/migrations";
 
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){
   await ensureV13Schema();
-  const session=await getAdminSession(); if(!canManagePersonnel(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  const session=await getAdminSession(); if(!session||!canManagePersonnel(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const {id}=await params;if(!(await canAccessEmployee(id,session!.officeId,isGeneralAdmin(session))))return NextResponse.json({error:"No autorizado para este agente"},{status:403}); const body=await request.json().catch(()=>({})); const pin=String(body.pin||""); const forceChange=body.forceChange!==false;
   if(!/^\d{4,8}$/.test(pin))return NextResponse.json({error:"El PIN debe tener entre 4 y 8 dígitos"},{status:400});
   const hash=await bcrypt.hash(pin,12); const lookup=await pinLookup(pin); const sql=db();

@@ -10,7 +10,7 @@ function normalizePermissions(value:any): string[]{const list=Array.isArray(valu
 function legacyRole(perms:string[]){if(perms.length===1&&perms[0]==="LICENSES")return "LICENSE_OPERATOR";if(perms.length===1&&perms[0]==="ATTENDANCE")return "ATTENDANCE_OPERATOR";return "CUSTOM";}
 
 export async function GET(){
-  await ensureV13Schema(); const s=await getAdminSession(); if(!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureV13Schema(); const s=await getAdminSession(); if(!s||!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
   const sql=db();
   const rows=await sql`SELECT u.id,u.email,u.role,u.active,u.must_change_password,u.last_login_at,u.created_at,u.updated_at,u.office_id,u.is_general_admin,o.name AS office_name,
     COALESCE(array_agg(up.permission_code ORDER BY up.permission_code) FILTER (WHERE up.permission_code IS NOT NULL),ARRAY[]::text[]) AS permissions
@@ -22,7 +22,7 @@ export async function GET(){
 }
 
 export async function POST(req:Request){
-  await ensureV13Schema(); const s=await getAdminSession(); if(!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureV13Schema(); const s=await getAdminSession(); if(!s||!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
   const b=await req.json().catch(()=>({})); const email=String(b.email||"").trim().toLowerCase(),password=String(b.password||""),permissions=normalizePermissions(b.permissions),officeId=Number(b.officeId);
   const forcePasswordChange=b.forcePasswordChange!==false;
   if(!/^\S+@\S+\.\S+$/.test(email))return NextResponse.json({error:"Correo inválido"},{status:400});
@@ -39,7 +39,7 @@ export async function POST(req:Request){
 }
 
 export async function PATCH(req:Request){
-  await ensureV13Schema(); const s=await getAdminSession(); if(!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureV13Schema(); const s=await getAdminSession(); if(!s||!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
   const b=await req.json().catch(()=>({})); const id=Number(b.id); if(!Number.isInteger(id))return NextResponse.json({error:"ID inválido"},{status:400});
   const sql=db(); const prev=(await sql`SELECT id,email,role,active,must_change_password,office_id,is_general_admin FROM app_users WHERE id=${id}`)[0];if(!prev)return NextResponse.json({error:"Usuario inexistente"},{status:404});
   const previousPermissions=(await sql`SELECT permission_code FROM app_user_permissions WHERE user_id=${id} ORDER BY permission_code`).map((r:any)=>String(r.permission_code));

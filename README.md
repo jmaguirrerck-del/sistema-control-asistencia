@@ -15,3 +15,7 @@ Incluye todas las funciones de V1.27 (multi-oficina y Reportes) y corrige el tip
 - `isGeneralAdmin` e `isAdmin` actúan como type guards para evitar falsos errores de sesión nula en TypeScript.
 
 Versión: **1.27.1**
+
+
+## V1.27.3 — Corrección integral de compilación
+Se corrigió de forma transversal el manejo de sesiones y permisos para evitar errores TypeScript de valores `null` y estrechamientos incorrectos a `never`.

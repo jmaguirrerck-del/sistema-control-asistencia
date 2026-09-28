@@ -5,7 +5,7 @@ import { hashToken, newQrToken } from "@/lib/qr";
 import { ensureV13Schema } from "@/lib/migrations";
 
 export async function POST(request:Request){
-  await ensureV13Schema(); const session=await getAdminSession(); if(!canManageAttendance(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureV13Schema(); const session=await getAdminSession(); if(!session||!canManageAttendance(session))return NextResponse.json({error:"No autorizado"},{status:403});
   if(!(await isDatabaseReady()))return NextResponse.json({error:"Primero inicializá la base de datos"},{status:400});
   const body=await request.json().catch(()=>({})); const requested=Number(body.officeId); const officeId=isGeneralAdmin(session)&&(Number.isInteger(requested)&&requested>0)?requested:session!.officeId;
   if(!officeId)return NextResponse.json({error:"Seleccioná una oficina"},{status:400});

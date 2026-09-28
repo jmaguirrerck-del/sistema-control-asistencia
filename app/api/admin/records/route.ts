@@ -50,7 +50,7 @@ async function recalculateAttendanceDay(sql:any, dayId:number){
 
 export async function GET(request:Request){
   await ensureV13Schema();
-  const session=await getAdminSession();if(!canManageAttendance(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  const session=await getAdminSession();if(!session||!canManageAttendance(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const url=new URL(request.url);
   const requested=Number(url.searchParams.get("officeId")); const officeId=isGeneralAdmin(session)&&(Number.isInteger(requested)&&requested>0)?requested:session!.officeId;
   if(url.searchParams.get("employees")==="1"){
@@ -91,7 +91,7 @@ export async function GET(request:Request){
 
 export async function POST(request:Request){
   await ensureV13Schema();
-  const session=await getAdminSession();if(!canManageAttendance(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  const session=await getAdminSession();if(!session||!canManageAttendance(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const body=await request.json().catch(()=>({}));
   const employeeId=String(body.employeeId||"");const date=String(body.date||"");const time=String(body.time||"");
   const eventType=String(body.eventType||"");const manualReason=String(body.manualReason||"");const note=String(body.note||"").trim().slice(0,500);
@@ -148,7 +148,7 @@ export async function POST(request:Request){
 export async function PUT(request:Request){
   await ensureV13Schema();
   const session=await getAdminSession();
-  if(!canManageAttendance(session))return NextResponse.json({error:"No autorizado para corregir horarios de marcación."},{status:403});
+  if(!session||!canManageAttendance(session))return NextResponse.json({error:"No autorizado para corregir horarios de marcación."},{status:403});
   const body=await request.json().catch(()=>({}));
   const eventId=Number(body.eventId);const time=String(body.time||"");const reasonCode=String(body.reasonCode||"");const note=String(body.note||"").trim().slice(0,500);
   if(!Number.isInteger(eventId)||eventId<=0||!validTime(time)||!correctionReasons.has(reasonCode))return NextResponse.json({error:"Complete una hora válida y el motivo de la corrección."},{status:400});
@@ -186,7 +186,7 @@ export async function PUT(request:Request){
 
 export async function PATCH(request:Request){
   await ensureV13Schema();
-  const session=await getAdminSession();if(!canManageAttendance(session))return NextResponse.json({error:"No autorizado para clasificar salidas intermedias."},{status:403});
+  const session=await getAdminSession();if(!session||!canManageAttendance(session))return NextResponse.json({error:"No autorizado para clasificar salidas intermedias."},{status:403});
   const body=await request.json().catch(()=>({}));
   const id=Number(body.intervalId);const reason=String(body.reasonCode||"");
   if(!Number.isInteger(id)||id<=0||!reasons.has(reason))return NextResponse.json({error:"Datos de clasificación inválidos."},{status:400});
@@ -209,7 +209,7 @@ export async function PATCH(request:Request){
 export async function DELETE(request:Request){
   await ensureV13Schema();
   const session=await getAdminSession();
-  if(!isGeneralAdmin(session))return NextResponse.json({error:"Solo el Administrador General puede eliminar registros de asistencia."},{status:403});
+  if(!session||!isGeneralAdmin(session))return NextResponse.json({error:"Solo el Administrador General puede eliminar registros de asistencia."},{status:403});
   const body=await request.json().catch(()=>({}));
   const ids=Array.isArray(body.ids)?[...new Set(body.ids.map((v:any)=>Number(v)).filter((v:number)=>Number.isInteger(v)&&v>0))]:[];
   if(!ids.length)return NextResponse.json({error:"Seleccione al menos un registro de asistencia."},{status:400});

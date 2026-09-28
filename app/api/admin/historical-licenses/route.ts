@@ -40,7 +40,7 @@ async function ensureFormSchema(){
 }
 
 export async function POST(request:Request){
-  const session=await getAdminSession(); if(!canManageLicenses(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  const session=await getAdminSession(); if(!session||!canManageLicenses(session))return NextResponse.json({error:"No autorizado"},{status:403});
   await ensureFormSchema(); const sql=db(); const body=await request.json().catch(()=>({}));
   if(body.action==="seed"){
     const payload=JSON.stringify(historicalLicenseForms);
@@ -77,7 +77,7 @@ export async function POST(request:Request){
 }
 
 export async function GET(request:Request){
-  const session=await getAdminSession(); if(!canManageLicenses(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  const session=await getAdminSession(); if(!session||!canManageLicenses(session))return NextResponse.json({error:"No autorizado"},{status:403});
   await ensureFormSchema(); const sql=db(); const u=new URL(request.url); const status=u.searchParams.get('status')||'PENDING';
   const rows=await sql`SELECT h.*,e.last_name,e.first_name,e.dni FROM historical_leave_forms h LEFT JOIN employees e ON e.id=h.employee_id WHERE (${status}='ALL' OR h.status=${status}) ORDER BY h.source_page,h.form_index`;
   const summary=(await sql`SELECT count(*)::int total,count(*) FILTER(WHERE employee_id IS NOT NULL)::int identified,count(*) FILTER(WHERE status='CONFIRMED')::int confirmed,count(*) FILTER(WHERE status='PENDING')::int pending,count(*) FILTER(WHERE employee_id IS NULL AND status='PENDING')::int unresolved FROM historical_leave_forms`)[0];
@@ -85,7 +85,7 @@ export async function GET(request:Request){
 }
 
 export async function PUT(request:Request){
-  const session=await getAdminSession(); if(!canManageLicenses(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  const session=await getAdminSession(); if(!session||!canManageLicenses(session))return NextResponse.json({error:"No autorizado"},{status:403});
   await ensureFormSchema(); const sql=db(); const body=await request.json().catch(()=>({}));
   if(body.action!=="export-unresolved")return NextResponse.json({error:"Acción inválida"},{status:400});
   const rows=await sql`SELECT source_page,form_index,position,form_type,detected_name,detected_dni,previous_recognized,next_recognized FROM historical_leave_forms WHERE status='PENDING' AND employee_id IS NULL ORDER BY source_page,form_index`;

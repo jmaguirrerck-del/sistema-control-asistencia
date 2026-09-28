@@ -5,7 +5,7 @@ import { getAdminSession,isGeneralAdmin } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 
 export async function GET(){
-  await ensureV13Schema(); const s=await getAdminSession(); if(!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureV13Schema(); const s=await getAdminSession(); if(!s||!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
   const sql=db();
   const rows=await sql`SELECT o.id,o.code,o.name,o.active,c.latitude,c.longitude,c.radius_meters,c.lateness_tolerance_minutes,c.auto_close_grace_minutes,c.qr_ttl_minutes,c.absence_count_start_date::text,
     (SELECT COUNT(*)::int FROM employees e WHERE e.office_id=o.id AND e.active=TRUE) AS active_employees
@@ -14,7 +14,7 @@ export async function GET(){
 }
 
 export async function POST(req:Request){
-  await ensureV13Schema(); const s=await getAdminSession(); if(!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureV13Schema(); const s=await getAdminSession(); if(!s||!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
   const b=await req.json().catch(()=>({})); const name=String(b.name||"").trim().slice(0,160),code=String(b.code||"").trim().toUpperCase().replace(/[^A-Z0-9_-]/g,"").slice(0,24);
   if(!name||!code)return NextResponse.json({error:"Completá nombre y código de la oficina."},{status:400});
   const sql=db();
@@ -27,7 +27,7 @@ export async function POST(req:Request){
 }
 
 export async function PATCH(req:Request){
-  await ensureV13Schema(); const s=await getAdminSession(); if(!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureV13Schema(); const s=await getAdminSession(); if(!s||!isGeneralAdmin(s))return NextResponse.json({error:"No autorizado"},{status:403});
   const b=await req.json().catch(()=>({})); const id=Number(b.id); if(!Number.isInteger(id)||id<1)return NextResponse.json({error:"Oficina inválida"},{status:400});
   const sql=db(); const prev=(await sql`SELECT * FROM offices WHERE id=${id}`)[0]; if(!prev)return NextResponse.json({error:"Oficina inexistente"},{status:404});
   const name=String(b.name??prev.name).trim().slice(0,160),active=typeof b.active==='boolean'?b.active:Boolean(prev.active);

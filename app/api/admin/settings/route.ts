@@ -5,7 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import { ensureV13Schema } from "@/lib/migrations";
 
 export async function GET(req:Request) {
-  await ensureV13Schema(); const session=await getAdminSession(); if(!isGeneralAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureV13Schema(); const session=await getAdminSession(); if(!session||!isGeneralAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const ready=await isDatabaseReady(); if(!ready)return NextResponse.json({ready:false});
   const u=new URL(req.url); const officeId=Number(u.searchParams.get('officeId')||1); if(!Number.isInteger(officeId)||officeId<1)return NextResponse.json({error:"Oficina inválida"},{status:400});
   const sql=db(); const rows=await sql`SELECT o.id AS office_id,o.name AS office_name,c.latitude,c.longitude,c.radius_meters,c.lateness_tolerance_minutes,c.auto_close_grace_minutes,c.qr_ttl_minutes,c.absence_count_start_date::text AS absence_count_start_date FROM offices o JOIN office_configs c ON c.office_id=o.id WHERE o.id=${officeId}`;
@@ -14,7 +14,7 @@ export async function GET(req:Request) {
 }
 
 export async function PUT(request:Request){
-  await ensureV13Schema(); const session=await getAdminSession(); if(!isGeneralAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureV13Schema(); const session=await getAdminSession(); if(!session||!isGeneralAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const body=await request.json().catch(()=>({})); const officeId=Number(body.office_id); if(!Number.isInteger(officeId)||officeId<1)return NextResponse.json({error:"Oficina inválida"},{status:400});
   const officeName=String(body.office_name||"").trim().slice(0,160),lat=Number(body.latitude),lng=Number(body.longitude),radius=Number(body.radius_meters),tolerance=Number(body.lateness_tolerance_minutes),qrTtl=Number(body.qr_ttl_minutes),absenceStart=String(body.absence_count_start_date||"");
   if(!officeName)return NextResponse.json({error:"Nombre de oficina inválido"},{status:400});

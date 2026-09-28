@@ -7,7 +7,7 @@ function validDate(v:string|null){return !!v&&/^\d{4}-\d{2}-\d{2}$/.test(v)}
 
 export async function GET(request:Request){
   await ensureV119LeaveDetailSchema();
-  const session=await getAdminSession(); if(!canViewLegajos(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  const session=await getAdminSession(); if(!session||!canViewLegajos(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const u=new URL(request.url),employeeId=u.searchParams.get("employeeId")||"";
   const year=new Date().getFullYear();
   const from=validDate(u.searchParams.get("from"))?u.searchParams.get("from")!:`${year}-01-01`;

@@ -22,7 +22,7 @@ async function makeUniquePin(sql: ReturnType<typeof db>, reserved:Set<string>) {
 export async function POST(){
   await ensureV13Schema();
   const session=await getAdminSession();
-  if(!canManagePersonnel(session)) return NextResponse.json({error:"No autorizado"},{status:403});
+  if(!session||!canManagePersonnel(session)) return NextResponse.json({error:"No autorizado"},{status:403});
   const sql=db();
   const employees=isGeneralAdmin(session)?await sql`
     SELECT id,last_name,first_name,dni FROM employees WHERE active=TRUE AND pin_hash IS NULL ORDER BY last_name,first_name

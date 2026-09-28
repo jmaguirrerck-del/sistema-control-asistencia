@@ -8,7 +8,7 @@ import { ensureV13Schema } from "@/lib/migrations";
 const leaveLabels:Record<string,string>={MEDICAL:"Licencia médica",ADMINISTRATIVE:"Licencia administrativa",VACATION:"Vacaciones",COMMISSION:"Comisión",AFFECTATION:"Afectación",FRANCO:"Franco",OTHER:"Otra novedad"};
 
 export async function GET(req:Request){
-  await ensureV13Schema(); const session=await getAdminSession(); if(!canViewDashboard(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  await ensureV13Schema(); const session=await getAdminSession(); if(!session||!canViewDashboard(session))return NextResponse.json({error:"No autorizado"},{status:403});
   if(!(await isDatabaseReady()))return NextResponse.json({ready:false}); await autoCloseEligibleDays();
   const u=new URL(req.url); const requested=Number(u.searchParams.get('officeId')); const officeId=isGeneralAdmin(session)&&(Number.isInteger(requested)&&requested>0)?requested:session!.officeId;
   const p=argentinaParts(),nowMinutes=p.hour*60+p.minute,sql=db();

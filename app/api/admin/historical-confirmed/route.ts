@@ -23,7 +23,7 @@ async function ensureSchema(){
 
 export async function GET(){
   const session=await getAdminSession();
-  if(!canManageLicenses(session))return NextResponse.json({error:'No autorizado'},{status:403});
+  if(!session||!canManageLicenses(session))return NextResponse.json({error:'No autorizado'},{status:403});
   await ensureSchema(); const sql=db();
   const imported=(await sql`SELECT count(*)::int n FROM historical_confirmed_imports WHERE source_file='LICENCIAS 2026-comprimido.pdf'`)[0]?.n||0;
   const byKind=historicalConfirmed2026.reduce((a:any,r)=>{a[r.kind]=(a[r.kind]||0)+1;return a},{VACATION:0,MEDICAL:0,ADMINISTRATIVE:0});
@@ -32,7 +32,7 @@ export async function GET(){
 
 export async function POST(){
   const session=await getAdminSession();
-  if(!canManageLicenses(session))return NextResponse.json({error:'No autorizado'},{status:403});
+  if(!session||!canManageLicenses(session))return NextResponse.json({error:'No autorizado'},{status:403});
   await ensureSchema(); const sql=db();
   let imported=0,already=0,missingEmployee=0; const missing:any[]=[];
   for(const r of historicalConfirmed2026){

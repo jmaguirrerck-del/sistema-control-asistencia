@@ -7,7 +7,7 @@ import { writeAudit } from "@/lib/audit";
 export async function POST(request: Request) {
   await ensureV13Schema();
   const session = await getAdminSession();
-  if (!isAdmin(session)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  if (!session || !isAdmin(session)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
 
   const body = await request.json().catch(() => ({}));
   if (String(body?.confirmation || "").trim().toUpperCase() !== "REINICIAR") {

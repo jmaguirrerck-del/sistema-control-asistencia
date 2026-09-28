@@ -19,3 +19,7 @@ Versión: **1.27.1**
 
 ## V1.27.3 — Corrección integral de compilación
 Se corrigió de forma transversal el manejo de sesiones y permisos para evitar errores TypeScript de valores `null` y estrechamientos incorrectos a `never`.
+
+
+## V1.27.4 — Corrección de tipado de asistencia
+Se tipó explícitamente el contexto diario de asistencia para evitar inferencias `never` durante el build de Next.js/TypeScript.

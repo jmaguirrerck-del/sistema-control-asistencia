@@ -7,6 +7,15 @@ import { pinLookup } from "@/lib/auth";
 
 type LocationInput = { lat: number; lng: number; accuracy?: number | null };
 
+export type EmployeeDayContext = {
+  date: string;
+  weekday: number;
+  schedule: any | null;
+  leave: any | null;
+  attendance: any | null;
+  lastEvent: any | null;
+};
+
 export async function getOfficeSettings(officeId:number=1) {
   const sql = db();
   const rows = await sql`
@@ -42,7 +51,7 @@ export async function findEmployeeByPin(pin:string, officeId?:number|null) {
   return (await bcrypt.compare(pin,String(row.pin_hash)))?row:null;
 }
 
-export async function todayEmployeeContext(employeeId:string) {
+export async function todayEmployeeContext(employeeId:string): Promise<EmployeeDayContext> {
   const sql=db(); const p=argentinaParts();
   const schedule=(await sql`SELECT start_time::text AS start_time,end_time::text AS end_time FROM employee_schedules WHERE employee_id=${employeeId} AND weekday=${p.weekday} LIMIT 1`)[0]||null;
   if(!schedule) return {date:p.date,weekday:p.weekday,schedule:null,leave:null,attendance:null,lastEvent:null};

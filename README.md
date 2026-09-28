@@ -72,3 +72,6 @@ El Administrador puede asignar contraseñas temporales a usuarios y exigir su ca
 
 ## V1.25.1 - Consolidación V1.24 + V1.25
 Incluye el tablero resumen de Legajos y buscador del Resumen diario de V1.24 junto con el restablecimiento de contraseñas de V1.25.
+
+## V1.26 - Arquitectura multi-oficina
+Se incorpora soporte para múltiples Oficinas/Direcciones en una única aplicación y base de datos. La DGE queda como oficina inicial; los datos existentes se migran automáticamente a esa oficina. El Administrador General tiene alcance transversal y puede crear oficinas, configurar parámetros por oficina y asignar usuarios con permisos múltiples. Los usuarios de oficina quedan restringidos a su propia dependencia. Cada oficina utiliza QR, ubicación, radio GPS, tolerancia y fecha de inicio del cómputo propios.

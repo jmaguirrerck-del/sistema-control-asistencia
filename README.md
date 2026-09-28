@@ -1,3 +1,7 @@
+## V1.27.2 — Corrección de compilación
+
+Corrige el tipado de la sesión del Administrador General en el layout multi-oficina y mantiene la validación nula en tipos de licencia.
+
 # Sistema de Control de Asistencia
 
 ## V1.27.1 — Corrección de compilación

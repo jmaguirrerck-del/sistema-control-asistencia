@@ -16,9 +16,10 @@ export async function POST(request:Request){
   await ensureV13Schema();
   const b=await request.json().catch(()=>({}));const token=String(b.token||""),pin=String(b.pin||"");const location=b.location||{};
   if(!/^\d{4,8}$/.test(pin))return NextResponse.json({error:"PIN inválido."},{status:400});
-  if(!(await validateQr(token)))return NextResponse.json({error:"El QR venció. Escaneá nuevamente el código de la oficina."},{status:410});
-  const geo=await validateLocation({lat:Number(location.lat),lng:Number(location.lng),accuracy:Number(location.accuracy)||null});if(!geo.ok)return NextResponse.json({error:"La ubicación ya no se encuentra dentro del área autorizada."},{status:403});
-  const employee=await findEmployeeByPin(pin);if(!employee)return NextResponse.json({error:"PIN incorrecto o no configurado."},{status:401});
+  const qr=await validateQr(token);if(!qr)return NextResponse.json({error:"El QR venció. Escaneá nuevamente el código de la oficina."},{status:410});
+  const officeId=Number(qr.office_id||1);
+  const geo=await validateLocation({lat:Number(location.lat),lng:Number(location.lng),accuracy:Number(location.accuracy)||null},officeId);if(!geo.ok)return NextResponse.json({error:"La ubicación ya no se encuentra dentro del área autorizada."},{status:403});
+  const employee=await findEmployeeByPin(pin,officeId);if(!employee)return NextResponse.json({error:"PIN incorrecto o no configurado para esta oficina."},{status:401});
   const device=await checkDevice(String(employee.id),true,b.deviceKey,b.deviceSignature,b.deviceRecoverySignature);
   if(!device.ok){
     const msg=device.reason==="DEVICE_USED_BY_OTHER"?"Este dispositivo ya está vinculado a otro agente. Solicitá al administrador la desvinculación correspondiente.":"Tu cuenta ya tiene otro dispositivo autorizado. Solicitá al administrador autorización para cambiar de celular.";

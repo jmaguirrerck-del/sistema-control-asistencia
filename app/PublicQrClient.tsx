@@ -23,18 +23,19 @@ function formatDate(date: Date) {
   }).format(date);
 }
 
-export default function PublicQrClient() {
+export default function PublicQrClient({officeId}:{officeId:number}) {
   const [image, setImage] = useState("");
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [officeName,setOfficeName]=useState("Dirección de Gestión Escolar");
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/qr/public", { method: "POST", cache: "no-store" });
+      const res = await fetch("/api/qr/public", { method: "POST", cache: "no-store", headers:{"content-type":"application/json"}, body:JSON.stringify({officeId}) });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "No se pudo generar el código QR.");
       const png = await QRCode.toDataURL(body.url, {
@@ -44,12 +45,13 @@ export default function PublicQrClient() {
       });
       setImage(png);
       setExpiresAt(new Date(body.expiresAt).getTime());
+      if(body.officeName)setOfficeName(body.officeName);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo generar el código QR.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [officeId]);
 
   useEffect(() => {
     refresh();
@@ -83,7 +85,7 @@ export default function PublicQrClient() {
         <div className="public-qr-head">
           <div>
             <div className="brand-kicker">Gobierno de Corrientes · Ministerio de Educación</div>
-            <h1 className="public-qr-title">Dirección de Gestión Escolar</h1>
+            <h1 className="public-qr-title">{officeName}</h1>
             <p className="public-qr-subtitle">Registro de entrada y salida del personal</p>
           </div>
           <div className="public-clock" aria-label="Hora actual">

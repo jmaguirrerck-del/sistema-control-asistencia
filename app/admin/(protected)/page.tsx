@@ -8,19 +8,22 @@ type Dashboard = {
   totals?: Record<string, number>;
   rows?: Array<Record<string, any>>;
   error?: string;
+  officeId?: number | null; officeName?: string; offices?: Array<{id:number;name:string}>;
 };
 
 export default function DashboardPage() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [q, setQ] = useState("");
+  const [officeId,setOfficeId]=useState("");
 
   async function load() {
-    const res = await fetch("/api/admin/dashboard", { cache: "no-store" });
+    const url=officeId?`/api/admin/dashboard?officeId=${officeId}`:"/api/admin/dashboard";
+    const res = await fetch(url, { cache: "no-store" });
     const body = await res.json().catch(() => ({ ready: false, error: "Error de respuesta" }));
     setData(body);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [officeId]);
 
   const filteredRows = useMemo(() => (data?.rows || []).filter((r:any) => `${r.name || ""} ${r.dni || ""}`.toLowerCase().includes(q.trim().toLowerCase())), [data?.rows, q]);
 
@@ -45,9 +48,10 @@ export default function DashboardPage() {
       <div className="row">
         <div>
           <h1 className="heading">Resumen diario</h1>
-          <p className="subheading">{data.date}</p>
+          <p className="subheading">{data.date}{data.officeName?` · ${data.officeName}`:""}</p>
         </div>
         <div className="spacer" />
+        {(data.offices||[]).length>0&&<select className="input" style={{maxWidth:320}} value={officeId} onChange={e=>setOfficeId(e.target.value)}><option value="">Todas las oficinas</option>{(data.offices||[]).map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select>}
         <button className="btn btn-secondary" onClick={load}>Actualizar</button>
       </div>
 
@@ -72,11 +76,12 @@ export default function DashboardPage() {
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Agente</th><th>Horario</th><th>Entrada</th><th>Estado</th><th>Salida</th><th>Compensación</th><th>Saldo</th></tr></thead>
+            <thead><tr><th>Agente</th>{(data.offices||[]).length>0&&<th>Oficina</th>}<th>Horario</th><th>Entrada</th><th>Estado</th><th>Salida</th><th>Compensación</th><th>Saldo</th></tr></thead>
             <tbody>
               {filteredRows.map((r: any) => (
                 <tr key={r.employeeId}>
                   <td><strong>{r.name}</strong><div className="muted">DNI {r.dni}</div></td>
+                  {(data.offices||[]).length>0&&<td>{r.officeName||"—"}</td>}
                   <td>{r.schedule}</td>
                   <td>{r.entry || "—"}{r.lateMinutes > 0 && <div className="muted">+{r.lateMinutes} min</div>}</td>
                   <td><span className={`badge ${r.statusTone || "info"}`}>{r.status}</span></td>

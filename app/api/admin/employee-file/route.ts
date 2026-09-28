@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession, isAdmin } from "@/lib/auth";
+import { getAdminSession, canViewLegajos, isGeneralAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ensureV119LeaveDetailSchema } from "@/lib/migrations";
 
@@ -7,24 +7,26 @@ function validDate(v:string|null){return !!v&&/^\d{4}-\d{2}-\d{2}$/.test(v)}
 
 export async function GET(request:Request){
   await ensureV119LeaveDetailSchema();
-  const session=await getAdminSession(); if(!isAdmin(session))return NextResponse.json({error:"No autorizado"},{status:403});
+  const session=await getAdminSession(); if(!canViewLegajos(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const u=new URL(request.url),employeeId=u.searchParams.get("employeeId")||"";
   const year=new Date().getFullYear();
   const from=validDate(u.searchParams.get("from"))?u.searchParams.get("from")!:`${year}-01-01`;
   const to=validDate(u.searchParams.get("to"))?u.searchParams.get("to")!:`${year}-12-31`;
   if(!employeeId||to<from)return NextResponse.json({error:"Parámetros inválidos"},{status:400});
   const sql=db();
-  const officeSettings=(await sql`SELECT absence_count_start_date::text AS absence_count_start_date FROM office_settings WHERE id=1`)[0];
-  const absenceStart=String(officeSettings?.absence_count_start_date||'2026-09-12');
+  
   const employee=(await sql`
-    SELECT e.id,e.last_name,e.first_name,e.dni,e.employment,e.active,e.seniority_date::text,e.seniority_notes,
+    SELECT e.id,e.office_id,e.last_name,e.first_name,e.dni,e.employment,e.active,e.seniority_date::text,e.seniority_notes,
       CASE WHEN e.seniority_date IS NULL THEN NULL ELSE EXTRACT(YEAR FROM age(current_date,e.seniority_date))::int END AS seniority_years,
       (e.pin_hash IS NOT NULL) AS pin_configured,e.force_pin_change,e.pin_changed_at,e.pin_change_source,e.pin_reset_count,
       COALESCE((SELECT json_agg(json_build_object('weekday',s.weekday,'start_time',left(s.start_time::text,5),'end_time',left(s.end_time::text,5)) ORDER BY s.weekday) FROM employee_schedules s WHERE s.employee_id=e.id),'[]'::json) AS schedules,
       (SELECT COUNT(*)::int FROM employee_devices d WHERE d.employee_id=e.id AND d.active=TRUE) AS active_devices,
       (SELECT to_char(MAX(d.last_seen_at) AT TIME ZONE 'America/Argentina/Buenos_Aires','DD/MM/YYYY HH24:MI') FROM employee_devices d WHERE d.employee_id=e.id AND d.active=TRUE) AS device_last_seen
     FROM employees e WHERE e.id=${employeeId}`)[0];
+  if(employee&&!isGeneralAdmin(session)&&Number(employee.office_id)!==Number(session!.officeId))return NextResponse.json({error:"No autorizado para este agente"},{status:403});
   if(!employee)return NextResponse.json({error:"Agente no encontrado"},{status:404});
+  const officeSettings=(await sql`SELECT absence_count_start_date::text AS absence_count_start_date FROM office_configs WHERE office_id=${Number(employee.office_id||1)}`)[0];
+  const absenceStart=String(officeSettings?.absence_count_start_date||'2026-09-12');
 
   const leaves=await sql`
     SELECT l.id,l.leave_type,l.leave_type_id,l.date_from::text,l.date_to::text,l.observation,l.computed_days,l.warning_text,l.created_by,l.created_at,

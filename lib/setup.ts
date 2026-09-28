@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { seedEmployees } from "@/lib/seed-employees";
+import { ensureV13Schema } from "@/lib/migrations";
 
 export async function initializeDatabase() {
   const sql = db();
@@ -232,5 +233,6 @@ export async function initializeDatabase() {
       end_time = EXCLUDED.end_time
   `;
 
+  await ensureV13Schema();
   return { employees: seedEmployees.length };
 }

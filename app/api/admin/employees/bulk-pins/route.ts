@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { randomInt } from "node:crypto";
 import { db } from "@/lib/db";
 import { ensureV13Schema } from "@/lib/migrations";
-import { getAdminSession, isAdmin, pinLookup } from "@/lib/auth";
+import { getAdminSession, canManagePersonnel, isGeneralAdmin, pinLookup } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 
 type GeneratedRow = { id:string; lastName:string; firstName:string; dni:string; pin:string; expiresAt:string };
@@ -22,13 +22,12 @@ async function makeUniquePin(sql: ReturnType<typeof db>, reserved:Set<string>) {
 export async function POST(){
   await ensureV13Schema();
   const session=await getAdminSession();
-  if(!isAdmin(session)) return NextResponse.json({error:"No autorizado"},{status:403});
+  if(!canManagePersonnel(session)) return NextResponse.json({error:"No autorizado"},{status:403});
   const sql=db();
-  const employees=await sql`
-    SELECT id,last_name,first_name,dni
-    FROM employees
-    WHERE active=TRUE AND pin_hash IS NULL
-    ORDER BY last_name,first_name
+  const employees=isGeneralAdmin(session)?await sql`
+    SELECT id,last_name,first_name,dni FROM employees WHERE active=TRUE AND pin_hash IS NULL ORDER BY last_name,first_name
+  `:await sql`
+    SELECT id,last_name,first_name,dni FROM employees WHERE active=TRUE AND office_id=${session!.officeId} AND pin_hash IS NULL ORDER BY last_name,first_name
   `;
   if(!employees.length) return NextResponse.json({ok:true,generated:[],count:0,message:"Todos los agentes activos ya tienen PIN configurado."});
 

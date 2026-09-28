@@ -1,11 +1,12 @@
 import {NextResponse} from "next/server";
-import {getAdminSession,canManageLicenses} from "@/lib/auth";
+import {getAdminSession,canManageLicenses,isGeneralAdmin} from "@/lib/auth";
 import {ensureV13Schema} from "@/lib/migrations";
 import {db} from "@/lib/db";
 export async function GET(req:Request){
  await ensureV13Schema();const s=await getAdminSession();if(!canManageLicenses(s))return NextResponse.json({error:"No autorizado"},{status:403});
  const u=new URL(req.url),employeeId=u.searchParams.get("employeeId")||"",typeId=Number(u.searchParams.get("leaveTypeId")),date=u.searchParams.get("date")||new Date().toISOString().slice(0,10);
  if(!employeeId||!Number.isInteger(typeId))return NextResponse.json({error:"Parámetros inválidos"},{status:400});const sql=db();
+ const emp=(await sql`SELECT office_id FROM employees WHERE id=${employeeId} LIMIT 1`)[0];if(!emp)return NextResponse.json({error:"Agente inexistente"},{status:404});if(!isGeneralAdmin(s)&&Number(emp.office_id)!==Number(s!.officeId))return NextResponse.json({error:"No autorizado para este agente"},{status:403});
  const t=(await sql`SELECT * FROM leave_types WHERE id=${typeId}`)[0];if(!t)return NextResponse.json({error:"Tipo inexistente"},{status:404});
  const year=Number(date.slice(0,4)),ym=date.slice(0,7);
  const annual=(await sql`SELECT COALESCE(SUM(computed_days),0)::int used FROM leave_records WHERE employee_id=${employeeId} AND leave_type_id=${typeId} AND active=TRUE AND EXTRACT(YEAR FROM date_from)=${year}`)[0];

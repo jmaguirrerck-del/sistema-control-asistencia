@@ -25,6 +25,40 @@ const catalog = [
 export async function ensureV13Schema(){
   if(migrated)return;
   const sql=db();
+  // V1.26: arquitectura multi-oficina. La DGE existente queda como oficina 1.
+  await sql`CREATE TABLE IF NOT EXISTS offices (
+    id BIGSERIAL PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`;
+  await sql`INSERT INTO offices(id,code,name,active) VALUES(1,'DGE','Dirección de Gestión Escolar',TRUE) ON CONFLICT(id) DO UPDATE SET code=EXCLUDED.code,name=EXCLUDED.name,active=TRUE`;
+  await sql`SELECT setval(pg_get_serial_sequence('offices','id'),GREATEST((SELECT COALESCE(MAX(id),1) FROM offices),1),true)`;
+  await sql`CREATE TABLE IF NOT EXISTS office_configs (
+    office_id BIGINT PRIMARY KEY REFERENCES offices(id) ON DELETE CASCADE,
+    latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, radius_meters INTEGER NOT NULL DEFAULT 75,
+    lateness_tolerance_minutes INTEGER NOT NULL DEFAULT 15, auto_close_grace_minutes INTEGER NOT NULL DEFAULT 60,
+    qr_ttl_minutes INTEGER NOT NULL DEFAULT 5, absence_count_start_date DATE,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`;
+  await sql`ALTER TABLE office_settings ADD COLUMN IF NOT EXISTS absence_count_start_date DATE`;
+  await sql`INSERT INTO office_configs(office_id,latitude,longitude,radius_meters,lateness_tolerance_minutes,auto_close_grace_minutes,qr_ttl_minutes,absence_count_start_date)
+    SELECT 1,latitude,longitude,radius_meters,lateness_tolerance_minutes,auto_close_grace_minutes,qr_ttl_minutes,absence_count_start_date FROM office_settings WHERE id=1
+    ON CONFLICT(office_id) DO NOTHING`;
+  await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS office_id BIGINT REFERENCES offices(id)`;
+  await sql`UPDATE employees SET office_id=1 WHERE office_id IS NULL`;
+  await sql`ALTER TABLE attendance_days ADD COLUMN IF NOT EXISTS office_id BIGINT REFERENCES offices(id)`;
+  await sql`UPDATE attendance_days ad SET office_id=e.office_id FROM employees e WHERE e.id=ad.employee_id AND ad.office_id IS NULL`;
+  await sql`ALTER TABLE leave_records ADD COLUMN IF NOT EXISTS office_id BIGINT REFERENCES offices(id)`;
+  await sql`UPDATE leave_records l SET office_id=e.office_id FROM employees e WHERE e.id=l.employee_id AND l.office_id IS NULL`;
+  await sql`ALTER TABLE qr_tokens ADD COLUMN IF NOT EXISTS office_id BIGINT REFERENCES offices(id)`;
+  await sql`UPDATE qr_tokens SET office_id=1 WHERE office_id IS NULL`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_employees_office ON employees(office_id,active,last_name,first_name)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_attendance_days_office_date ON attendance_days(office_id,work_date)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_leave_records_office_dates ON leave_records(office_id,date_from,date_to)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_qr_tokens_office ON qr_tokens(office_id,expires_at)`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS force_pin_change BOOLEAN NOT NULL DEFAULT FALSE`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_changed_at TIMESTAMPTZ`;
   await sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pin_change_source TEXT`;
@@ -38,6 +72,7 @@ export async function ensureV13Schema(){
   await sql`UPDATE office_settings SET absence_count_start_date='2026-09-12'::date,updated_at=now() WHERE id=1 AND absence_count_start_date IS DISTINCT FROM '2026-09-12'::date`;
   // V1.22: tolerancia oficial de ingreso fijada en 15 minutos.
   await sql`UPDATE office_settings SET lateness_tolerance_minutes=15,updated_at=now() WHERE id=1 AND lateness_tolerance_minutes<>15`;
+  await sql`UPDATE office_configs c SET latitude=s.latitude,longitude=s.longitude,radius_meters=s.radius_meters,lateness_tolerance_minutes=s.lateness_tolerance_minutes,auto_close_grace_minutes=s.auto_close_grace_minutes,qr_ttl_minutes=s.qr_ttl_minutes,absence_count_start_date=s.absence_count_start_date,updated_at=now() FROM office_settings s WHERE c.office_id=1 AND s.id=1`;
   await sql`CREATE TABLE IF NOT EXISTS employee_devices (
     id BIGSERIAL PRIMARY KEY, employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     device_hash TEXT NOT NULL UNIQUE, user_agent TEXT, active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -95,6 +130,10 @@ export async function ensureV13Schema(){
   )`;
   // V1.25: permite exigir al usuario que reemplace una contraseña temporal.
   await sql`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS office_id BIGINT REFERENCES offices(id)`;
+  await sql`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS is_general_admin BOOLEAN NOT NULL DEFAULT FALSE`;
+  await sql`UPDATE app_users SET is_general_admin=TRUE WHERE role='ADMIN'`;
+  await sql`UPDATE app_users SET office_id=1 WHERE office_id IS NULL AND is_general_admin=FALSE`;
   // V1.23: permisos múltiples por usuario. El campo role se conserva por compatibilidad,
   // pero las autorizaciones operativas se resuelven desde app_user_permissions.
   await sql`DO $$ DECLARE c RECORD; BEGIN
@@ -123,8 +162,11 @@ export async function ensureV13Schema(){
     PRIMARY KEY(user_id,permission_code)
   )`;
   await sql`INSERT INTO app_permissions(code,name,description) VALUES
+    ('DASHBOARD','Tablero de oficina','Ver el resumen diario y los indicadores de la oficina asignada.'),
+    ('PERSONNEL','Gestión de personal','Alta, edición, horarios, PIN y dispositivos del personal de la oficina asignada.'),
+    ('LEGAJOS','Legajos e inasistencias','Consultar legajos, faltas justificadas/no justificadas y tardanzas de la oficina asignada.'),
     ('LICENSES','Operador de Licencias','Registrar y consultar licencias, vacaciones, saldos e historial de licencias.'),
-    ('ATTENDANCE','Operador de Asistencia','Consultar registros y realizar marcaciones manuales excepcionales.')
+    ('ATTENDANCE','Operador de Asistencia','Consultar registros y realizar marcaciones manuales/correcciones excepcionales.')
     ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,active=TRUE`;
   // Migración automática de usuarios existentes: conserva los permisos que ya tenían por rol.
   await sql`INSERT INTO app_user_permissions(user_id,permission_code,granted_by)

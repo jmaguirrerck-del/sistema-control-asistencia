@@ -1,0 +1,13 @@
+"use client";
+import {FormEvent,useEffect,useState} from "react";
+
+export default function OficinasPage(){
+ const [rows,setRows]=useState<any[]>([]),[name,setName]=useState(""),[code,setCode]=useState(""),[msg,setMsg]=useState("");
+ async function load(){const r=await fetch('/api/admin/offices',{cache:'no-store'});const b=await r.json().catch(()=>({}));if(r.ok)setRows(b.offices||[]);else setMsg(b.error||'No se pudo cargar');}
+ useEffect(()=>{load()},[]);
+ async function create(e:FormEvent){e.preventDefault();const r=await fetch('/api/admin/offices',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,code})});const b=await r.json().catch(()=>({}));setMsg(r.ok?'Oficina creada. Configurá ubicación y parámetros antes de habilitar su QR.':b.error||'No se pudo crear');if(r.ok){setName('');setCode('');load();}}
+ async function toggle(x:any){const r=await fetch('/api/admin/offices',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({id:x.id,active:!x.active})});setMsg(r.ok?(x.active?'Oficina desactivada.':'Oficina activada.'):'No se pudo actualizar');if(r.ok)load();}
+ return <div className="stack"><div><h1 className="heading">Oficinas y Direcciones</h1><p className="subheading">Administración central de las dependencias incorporadas al control de asistencia.</p></div>
+ <form className="card stack" onSubmit={create}><h2 style={{margin:0}}>Agregar oficina</h2><div className="form-row"><div><label className="label">Nombre</label><input className="input" required value={name} onChange={e=>setName(e.target.value)} placeholder="Dirección de ..."/></div><div><label className="label">Código</label><input className="input" required value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="DIRECCION_X"/></div></div><button className="btn btn-primary">Crear oficina</button>{msg&&<div className="notice info">{msg}</div>}</form>
+ <div className="card table-wrap"><table><thead><tr><th>Oficina / Dirección</th><th>Personal activo</th><th>Radio GPS</th><th>Tolerancia</th><th>Inicio de cómputo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>{rows.map(o=><tr key={o.id}><td><strong>{o.name}</strong><div className="muted">{o.code} · ID {o.id}</div></td><td>{o.active_employees}</td><td>{o.radius_meters??'—'} m</td><td>{o.lateness_tolerance_minutes??'—'} min</td><td>{o.absence_count_start_date?new Date(o.absence_count_start_date+'T00:00:00').toLocaleDateString('es-AR'):'—'}</td><td>{o.active?'Activa':'Inactiva'}</td><td><a className="btn btn-secondary" href={`/admin/configuracion?officeId=${o.id}`}>Configurar</a> <button className="btn btn-secondary" onClick={()=>toggle(o)}>{o.active?'Desactivar':'Activar'}</button></td></tr>)}</tbody></table></div></div>;
+}

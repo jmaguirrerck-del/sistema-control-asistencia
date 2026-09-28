@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession, isAdmin, canManageAttendance } from "@/lib/auth";
+import { getAdminSession, isGeneralAdmin, canManageAttendance } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { ensureV13Schema } from "@/lib/migrations";
@@ -16,7 +16,7 @@ function minutes(v:string){const [h,m]=v.slice(0,5).split(":").map(Number);retur
 
 
 async function recalculateAttendanceDay(sql:any, dayId:number){
-  const day=(await sql`SELECT id,work_date::text,scheduled_start::text,scheduled_end::text,exit_type FROM attendance_days WHERE id=${dayId} LIMIT 1`)[0];
+  const day=(await sql`SELECT id,office_id,work_date::text,scheduled_start::text,scheduled_end::text,exit_type FROM attendance_days WHERE id=${dayId} LIMIT 1`)[0];
   if(!day)return;
   const events=await sql`
     SELECT id,event_type,occurred_at,metadata,
@@ -27,7 +27,7 @@ async function recalculateAttendanceDay(sql:any, dayId:number){
   `;
   const entry=events.find((e:any)=>String(e.event_type)==='ENTRY');
   if(!entry)return;
-  const toleranceRow=(await sql`SELECT lateness_tolerance_minutes FROM office_settings WHERE id=1 LIMIT 1`)[0];
+  const toleranceRow=(await sql`SELECT lateness_tolerance_minutes FROM office_configs WHERE office_id=${Number(day.office_id||1)} LIMIT 1`)[0];
   const tolerance=Number(toleranceRow?.lateness_tolerance_minutes ?? 15);
   const start=String(day.scheduled_start).slice(0,5);
   const rawLate=Math.max(0,minutes(String(entry.local_time))-minutes(start));
@@ -52,9 +52,10 @@ export async function GET(request:Request){
   await ensureV13Schema();
   const session=await getAdminSession();if(!canManageAttendance(session))return NextResponse.json({error:"No autorizado"},{status:403});
   const url=new URL(request.url);
+  const requested=Number(url.searchParams.get("officeId")); const officeId=isGeneralAdmin(session)&&(Number.isInteger(requested)&&requested>0)?requested:session!.officeId;
   if(url.searchParams.get("employees")==="1"){
     const sql=db();
-    const employees=await sql`SELECT id,last_name,first_name,dni,employment FROM employees WHERE active=TRUE ORDER BY last_name,first_name`;
+    const employees=officeId?await sql`SELECT id,last_name,first_name,dni,employment FROM employees WHERE active=TRUE AND office_id=${officeId} ORDER BY last_name,first_name`:await sql`SELECT id,last_name,first_name,dni,employment FROM employees WHERE active=TRUE ORDER BY last_name,first_name`;
     return NextResponse.json(employees);
   }
   const date=url.searchParams.get("date");if(!date||!validDate(date))return NextResponse.json({error:"Fecha inválida"},{status:400});
@@ -84,7 +85,7 @@ export async function GET(request:Request){
         'classified_by',ai.classified_by,'classified_at',ai.classified_at
       ) ORDER BY ai.exited_at) FROM attendance_intervals ai WHERE ai.attendance_day_id=ad.id AND ai.reentered_at IS NOT NULL),'[]'::json) AS intervals
     FROM attendance_days ad JOIN employees e ON e.id=ad.employee_id
-    WHERE ad.work_date=${date}::date ORDER BY e.last_name,e.first_name
+    WHERE ad.work_date=${date}::date AND (${officeId}::bigint IS NULL OR e.office_id=${officeId}) ORDER BY e.last_name,e.first_name
   `;return NextResponse.json(rows);
 }
 
@@ -97,8 +98,10 @@ export async function POST(request:Request){
   if(!employeeId||!validDate(date)||!validTime(time)||!movementTypes.has(eventType)||!manualReasons.has(manualReason))return NextResponse.json({error:"Complete agente, fecha, hora, movimiento y motivo."},{status:400});
   if(manualReason==="OTHER"&&!note)return NextResponse.json({error:"Para 'Otra causa' debe ingresar una observación."},{status:400});
   const sql=db();
-  const employee=(await sql`SELECT id,last_name,first_name,dni,active FROM employees WHERE id=${employeeId} LIMIT 1`)[0];
+  const employee=(await sql`SELECT id,last_name,first_name,dni,active,office_id FROM employees WHERE id=${employeeId} LIMIT 1`)[0];
   if(!employee||!employee.active)return NextResponse.json({error:"Agente inexistente o inactivo."},{status:404});
+  if(!isGeneralAdmin(session)&&Number(employee.office_id)!==Number(session!.officeId))return NextResponse.json({error:"No autorizado para este agente."},{status:403});
+  const officeId=Number(employee.office_id||1);
   const schedule=(await sql`
     SELECT start_time::text,end_time::text FROM employee_schedules
     WHERE employee_id=${employeeId} AND weekday=(EXTRACT(ISODOW FROM ${date}::date))::int LIMIT 1
@@ -112,11 +115,11 @@ export async function POST(request:Request){
   if(eventType==="ENTRY"){
     if(day?.entry_at)return NextResponse.json({error:"La jornada ya tiene una entrada registrada."},{status:409});
     const start=String(schedule.start_time).slice(0,5);const raw=Math.max(0,minutes(time)-minutes(start));
-    // Regla DGE: hasta 15 min no hay atraso; si se supera, se computa el total desde la hora prevista.
-    const late=raw>15?raw:0;
+    const cfg=(await sql`SELECT lateness_tolerance_minutes FROM office_configs WHERE office_id=${officeId}`)[0]; const tolerance=Number(cfg?.lateness_tolerance_minutes||15);
+    const late=raw>tolerance?raw:0;
     if(!day){
-      day=(await sql`INSERT INTO attendance_days(employee_id,work_date,scheduled_start,scheduled_end,entry_at,late_minutes,pending_minutes,admin_note)
-        VALUES(${employeeId},${date}::date,${start}::time,${String(schedule.end_time).slice(0,5)}::time,(${occurred}::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'),${late},${late},${`Marcación manual: ${manualReason}${note?` - ${note}`:""}`}) RETURNING *`)[0];
+      day=(await sql`INSERT INTO attendance_days(office_id,employee_id,work_date,scheduled_start,scheduled_end,entry_at,late_minutes,pending_minutes,admin_note)
+        VALUES(${officeId},${employeeId},${date}::date,${start}::time,${String(schedule.end_time).slice(0,5)}::time,(${occurred}::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'),${late},${late},${`Marcación manual: ${manualReason}${note?` - ${note}`:""}`}) RETURNING *`)[0];
     }else{
       day=(await sql`UPDATE attendance_days SET entry_at=(${occurred}::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'),late_minutes=${late},pending_minutes=${late},admin_note=${`Marcación manual: ${manualReason}${note?` - ${note}`:""}`},updated_at=now() WHERE id=${day.id} RETURNING *`)[0];
     }
@@ -145,7 +148,7 @@ export async function POST(request:Request){
 export async function PUT(request:Request){
   await ensureV13Schema();
   const session=await getAdminSession();
-  if(!isAdmin(session))return NextResponse.json({error:"Solo el administrador puede corregir horarios de marcación."},{status:403});
+  if(!canManageAttendance(session))return NextResponse.json({error:"No autorizado para corregir horarios de marcación."},{status:403});
   const body=await request.json().catch(()=>({}));
   const eventId=Number(body.eventId);const time=String(body.time||"");const reasonCode=String(body.reasonCode||"");const note=String(body.note||"").trim().slice(0,500);
   if(!Number.isInteger(eventId)||eventId<=0||!validTime(time)||!correctionReasons.has(reasonCode))return NextResponse.json({error:"Complete una hora válida y el motivo de la corrección."},{status:400});
@@ -153,12 +156,13 @@ export async function PUT(request:Request){
   const sql=db();
   const event=(await sql`
     SELECT ae.id,ae.attendance_day_id,ae.employee_id,ae.event_type,ae.occurred_at,ae.metadata,
-           ad.work_date::text,
+           ad.work_date::text,e.office_id,
            to_char(ae.occurred_at AT TIME ZONE 'America/Argentina/Buenos_Aires','HH24:MI') AS local_time
-    FROM attendance_events ae JOIN attendance_days ad ON ad.id=ae.attendance_day_id
+    FROM attendance_events ae JOIN attendance_days ad ON ad.id=ae.attendance_day_id JOIN employees e ON e.id=ae.employee_id
     WHERE ae.id=${eventId} LIMIT 1
   `)[0];
   if(!event)return NextResponse.json({error:"Marcación no encontrada."},{status:404});
+  if(!isGeneralAdmin(session)&&Number(event.office_id)!==Number(session!.officeId))return NextResponse.json({error:"No autorizado para esta oficina."},{status:403});
   if(!editableMovementTypes.has(String(event.event_type)))return NextResponse.json({error:"Este movimiento no admite corrección horaria."},{status:409});
 
   const movements=await sql`SELECT id,event_type,occurred_at FROM attendance_events WHERE attendance_day_id=${event.attendance_day_id} AND event_type IN ('ENTRY','EXIT','REENTRY','AUTO_EXIT') ORDER BY occurred_at,id`;
@@ -182,15 +186,16 @@ export async function PUT(request:Request){
 
 export async function PATCH(request:Request){
   await ensureV13Schema();
-  const session=await getAdminSession();if(!isAdmin(session))return NextResponse.json({error:"Solo el administrador puede clasificar salidas intermedias."},{status:403});
+  const session=await getAdminSession();if(!canManageAttendance(session))return NextResponse.json({error:"No autorizado para clasificar salidas intermedias."},{status:403});
   const body=await request.json().catch(()=>({}));
   const id=Number(body.intervalId);const reason=String(body.reasonCode||"");
   if(!Number.isInteger(id)||id<=0||!reasons.has(reason))return NextResponse.json({error:"Datos de clasificación inválidos."},{status:400});
   const note=String(body.adminNote||"").trim().slice(0,500);
   const countsAsWork=body.countsAsWork===true;
   const sql=db();
-  const previous=(await sql`SELECT * FROM attendance_intervals WHERE id=${id}`)[0];
+  const previous=(await sql`SELECT ai.*,e.office_id FROM attendance_intervals ai JOIN employees e ON e.id=ai.employee_id WHERE ai.id=${id}`)[0];
   if(!previous)return NextResponse.json({error:"Intervalo no encontrado."},{status:404});
+  if(!isGeneralAdmin(session)&&Number(previous.office_id)!==Number(session!.officeId))return NextResponse.json({error:"No autorizado para esta oficina."},{status:403});
   if(!previous.reentered_at)return NextResponse.json({error:"La salida todavía no tiene reingreso registrado."},{status:409});
   const updated=(await sql`
     UPDATE attendance_intervals SET reason_code=${reason},admin_note=${note||null},counts_as_work=${countsAsWork},classified_by=${session!.email},classified_at=now(),updated_at=now()
@@ -204,7 +209,7 @@ export async function PATCH(request:Request){
 export async function DELETE(request:Request){
   await ensureV13Schema();
   const session=await getAdminSession();
-  if(!isAdmin(session))return NextResponse.json({error:"Solo el administrador puede eliminar registros de asistencia."},{status:403});
+  if(!isGeneralAdmin(session))return NextResponse.json({error:"Solo el Administrador General puede eliminar registros de asistencia."},{status:403});
   const body=await request.json().catch(()=>({}));
   const ids=Array.isArray(body.ids)?[...new Set(body.ids.map((v:any)=>Number(v)).filter((v:number)=>Number.isInteger(v)&&v>0))]:[];
   if(!ids.length)return NextResponse.json({error:"Seleccione al menos un registro de asistencia."},{status:400});

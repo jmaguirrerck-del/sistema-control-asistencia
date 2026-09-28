@@ -1,23 +1,11 @@
-SISTEMA DE CONTROL DE ASISTENCIA - V1.27.0 - PAQUETE LIMPIO
+V1.27.1 - PAQUETE COMPLETO CORREGIDO
 
-Este paquete contiene solo los archivos necesarios del proyecto para actualizar GitHub/Vercel.
-No incluye guias historicas, archivos temporales ni tsconfig.tsbuildinfo.
+1. Descomprima este ZIP.
+2. En GitHub, Add file > Upload files.
+3. Suba TODO el contenido de esta carpeta al raíz del repositorio.
+4. Haga Commit changes.
+5. Espere el despliegue de Vercel. Debe finalizar en READY.
+6. Verifique package.json: version 1.27.1.
+7. En la aplicación deben aparecer Reportes y, para Administrador General, Oficinas.
 
-SUBIDA POR GITHUB WEB
-1. Descomprima este ZIP en su computadora.
-2. Abra el repositorio del sistema en GitHub.
-3. Use Add file > Upload files.
-4. Arrastre TODO EL CONTENIDO INTERNO de esta carpeta (no la carpeta contenedora).
-5. La cantidad total de archivos es inferior a 100, para evitar el limite que encontro anteriormente.
-6. Espere a que todos los archivos terminen de cargar antes de hacer Commit changes.
-7. Confirme el commit.
-8. En Vercel, espere a que el nuevo deployment termine en Ready.
-
-VERIFICACIONES
-- package.json debe indicar version 1.27.0.
-- Debe existir app/admin/(protected)/oficinas/page.tsx.
-- Debe existir app/admin/(protected)/reportes/page.tsx.
-- En el panel administrativo deben aparecer Oficinas y Reportes si el usuario tiene permisos suficientes.
-
-IMPORTANTE
-No suba archivos .env con claves reales. Vercel conserva las variables de entorno configuradas en el proyecto.
+No es necesario subir V1.26 ni V1.27 antes.

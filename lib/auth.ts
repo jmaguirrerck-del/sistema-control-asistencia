@@ -53,9 +53,9 @@ export async function getAdminSession() {
 
 type Session = Awaited<ReturnType<typeof getAdminSession>>;
 type NonNullSession = NonNullable<Session>;
-export function isGeneralAdmin(session: Session): boolean { return Boolean(session?.generalAdmin); }
+export function isGeneralAdmin(session: Session): session is NonNullSession { return Boolean(session?.generalAdmin); }
 // Compatibilidad: donde históricamente se pedía ADMIN, ahora significa administrador general.
-export function isAdmin(session: Session): boolean { return isGeneralAdmin(session); }
+export function isAdmin(session: Session): session is NonNullSession { return isGeneralAdmin(session); }
 export function hasPermission(session: Session, permission: AppPermission): session is NonNullSession {
   return Boolean(session && (session.generalAdmin || session.permissions?.includes(permission)));
 }

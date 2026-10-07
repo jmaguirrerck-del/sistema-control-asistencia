@@ -1,0 +1,23 @@
+SISTEMA DE CONTROL DE ASISTENCIA - V1.28.0
+
+ESTA CARPETA ES EL PROYECTO COMPLETO PARA SUBIR A GITHUB/VERCEL.
+
+CAMBIO PRINCIPAL DE SEGURIDAD QR
+- Se eliminó el generador público de QR de la portada.
+- /api/qr/public ya no genera códigos.
+- Nuevo permiso: Generador de QR (QR_GENERATOR).
+- El Administrador General lo asigna desde Usuarios y permisos.
+- Un usuario con solo ese permiso accede únicamente al Generador de QR de su oficina.
+- El QR se renueva y vence cada 3 minutos.
+- La página /admin/qr y su API verifican sesión + permiso en servidor.
+
+SUBIDA A GITHUB
+1. Reemplazar en el repositorio los archivos de V1.27.4 por el contenido COMPLETO de esta carpeta.
+2. Confirmar que package.json indique version 1.28.0.
+3. Crear commit sugerido: V1.28.0 - Generador QR protegido
+4. Esperar el despliegue automático de Vercel.
+5. Ingresar con el Administrador General y asignar el permiso Generador de QR al usuario responsable de cada oficina.
+
+IMPORTANTE
+No hace falta configurar restricciones por IP en esta versión.
+La cuenta del responsable puede permanecer con la sesión abierta en la PC de la oficina durante la jornada.

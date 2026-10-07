@@ -27,7 +27,7 @@ export default function AdminLoginPage() {
     }
     const body = await res.json().catch(() => ({}));
     const permissions=Array.isArray(body.permissions)?body.permissions:[];
-    router.push(body.mustChangePassword ? "/admin/cambiar-contrasena" : body.role === "ADMIN" ? "/admin" : permissions.includes("LICENSES") ? "/admin/novedades" : permissions.includes("ATTENDANCE") ? "/admin/registros" : "/admin");
+    router.push(body.mustChangePassword ? "/admin/cambiar-contrasena" : body.role === "ADMIN" ? "/admin" : permissions.includes("LICENSES") ? "/admin/novedades" : permissions.includes("ATTENDANCE") ? "/admin/registros" : permissions.includes("QR_GENERATOR") ? "/admin/qr" : "/admin");
     router.refresh();
   }
 

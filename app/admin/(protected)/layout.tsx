@@ -6,7 +6,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
   const session = await getAdminSession(); if (!session) redirect("/admin/login");
   const currentSession = session!;
   if (currentSession.mustChangePassword) redirect("/admin/cambiar-contrasena");
-  const general=isGeneralAdmin(currentSession), dash=hasPermission(currentSession,"DASHBOARD"), personnel=hasPermission(currentSession,"PERSONNEL"), legajos=hasPermission(currentSession,"LEGAJOS"), licenses=hasPermission(currentSession,"LICENSES"), attendance=hasPermission(currentSession,"ATTENDANCE");
+  const general=isGeneralAdmin(currentSession), dash=hasPermission(currentSession,"DASHBOARD"), personnel=hasPermission(currentSession,"PERSONNEL"), legajos=hasPermission(currentSession,"LEGAJOS"), licenses=hasPermission(currentSession,"LICENSES"), attendance=hasPermission(currentSession,"ATTENDANCE"), qrGenerator=hasPermission(currentSession,"QR_GENERATOR");
   const subtitle=general?"Administrador General":`${currentSession.officeName||"Oficina asignada"} · Usuario autorizado`;
   return <>
     <header className="site-header"><div className="container site-header-inner"><div><div className="brand-kicker">Gobierno de Corrientes · Ministerio de Educación</div><div className="brand-title">Sistema de Control de Asistencia</div><div className="brand-subtitle">{subtitle}</div></div><form action="/api/admin/logout" method="post"><button className="btn btn-secondary" type="submit">Cerrar sesión</button></form></div></header>
@@ -19,7 +19,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
       {licenses&&<Link href="/admin/novedades">Licencias y vacaciones</Link>}
       {general&&<Link href="/admin/oficinas">Oficinas</Link>}
       {general&&<Link href="/admin/importacion-licencias">Importación histórica</Link>}
-      {attendance&&<Link href="/admin/qr">QR de oficina</Link>}
+      {qrGenerator&&<Link href="/admin/qr">Generador de QR</Link>}
       {general&&<Link href="/admin/usuarios">Usuarios y permisos</Link>}
       {general&&<Link href="/admin/configuracion">Configuración</Link>}
     </nav><section style={{ minWidth: 0 }}>{children}</section></div></main>

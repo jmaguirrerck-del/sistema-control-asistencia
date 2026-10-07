@@ -1,3 +1,7 @@
+# Sistema de Control de Asistencia — V1.28.0
+
+> V1.28.0: Generador de QR protegido por usuario/contraseña y permiso `QR_GENERATOR`; generación pública deshabilitada; renovación cada 3 minutos.
+
 ## V1.27.2 — Corrección de compilación
 
 Corrige el tipado de la sesión del Administrador General en el layout multi-oficina y mantiene la validación nula en tipos de licencia.

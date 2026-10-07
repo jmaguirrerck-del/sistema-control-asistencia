@@ -29,6 +29,6 @@ export async function POST(req: Request) {
   await sql`UPDATE app_users SET password_hash=${hash},must_change_password=FALSE,updated_at=now() WHERE id=${session.userId}`;
   await writeAudit({ actor: session.email, action: "CHANGE_OWN_PASSWORD", entityType: "app_user", entityId: String(session.userId), next: { mustChangePassword: false } });
   const permissions=session.permissions||[];
-  const redirect=session.role === "ADMIN" ? "/admin" : permissions.includes("LICENSES") ? "/admin/novedades" : permissions.includes("ATTENDANCE") ? "/admin/registros" : "/admin";
+  const redirect=session.role === "ADMIN" ? "/admin" : permissions.includes("LICENSES") ? "/admin/novedades" : permissions.includes("ATTENDANCE") ? "/admin/registros" : permissions.includes("QR_GENERATOR") ? "/admin/qr" : "/admin";
   return NextResponse.json({ ok: true, redirect });
 }

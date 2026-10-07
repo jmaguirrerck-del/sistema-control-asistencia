@@ -1,0 +1,12 @@
+"use client";
+import QRCode from "qrcode";
+import { useCallback, useEffect, useState } from "react";
+
+type Office={id:number;name:string};
+export default function QrClient(){
+ const [image,setImage]=useState(""),[expires,setExpires]=useState(""),[error,setError]=useState(""),[officeName,setOfficeName]=useState(""),[offices,setOffices]=useState<Office[]>([]),[officeId,setOfficeId]=useState("");
+ useEffect(()=>{(async()=>{const me=await fetch('/api/admin/me',{cache:'no-store'}).then(r=>r.json()).catch(()=>({}));if(me.generalAdmin){const r=await fetch('/api/admin/offices',{cache:'no-store'});if(r.ok){const b=await r.json();const list=b.offices||[];setOffices(list);if(list[0])setOfficeId(String(list[0].id));}}else if(me.officeId){setOfficeId(String(me.officeId));}})()},[]);
+ const refresh=useCallback(async()=>{if(!officeId)return;setError("");const res=await fetch('/api/admin/qr',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({officeId:Number(officeId)})});const body=await res.json().catch(()=>({}));if(!res.ok){setError(body.error||'No se pudo generar el QR');setImage('');return;}const png=await QRCode.toDataURL(body.url,{width:520,margin:2,errorCorrectionLevel:'M'});setImage(png);setExpires(body.expiresAt);setOfficeName(body.officeName||'');},[officeId]);
+ useEffect(()=>{if(!officeId)return;refresh();const id=window.setInterval(refresh,3*60*1000);return()=>window.clearInterval(id)},[refresh,officeId]);
+ return <div className="stack"><div><h1 className="heading">Generador de QR</h1><p className="subheading">{officeName||'Oficina asignada'} · Acceso protegido · El código se renueva automáticamente cada 3 minutos.</p></div>{offices.length>0&&<div className="card"><label className="label">Oficina / Dirección</label><select className="input" value={officeId} onChange={e=>setOfficeId(e.target.value)}>{offices.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></div>}<div className="card" style={{textAlign:'center'}}>{error?<div className="notice bad">{error}</div>:image?<><img src={image} alt="Código QR dinámico" style={{width:'min(100%,520px)',height:'auto'}}/><div className="muted">Válido hasta: {expires?new Date(expires).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}):'—'}</div></>:<div>Seleccioná/configurá una oficina para generar el QR.</div>}</div><div className="row"><button className="btn btn-secondary" onClick={refresh} disabled={!officeId}>Renovar ahora</button></div></div>;
+}

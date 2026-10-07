@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 
 const COOKIE_NAME = "dge_admin_session";
 export type AppRole = "ADMIN" | "LICENSE_OPERATOR" | "ATTENDANCE_OPERATOR" | "CUSTOM";
-export type AppPermission = "DASHBOARD" | "PERSONNEL" | "LEGAJOS" | "LICENSES" | "ATTENDANCE";
+export type AppPermission = "DASHBOARD" | "PERSONNEL" | "LEGAJOS" | "LICENSES" | "ATTENDANCE" | "QR_GENERATOR";
 
 function authKey() {
   const secret = process.env.AUTH_SECRET;
@@ -37,7 +37,7 @@ export async function getAdminSession() {
 
     // Cuenta de contingencia definida en Vercel: administrador general sin restricción de oficina.
     if (role === "ADMIN" && userId === null) {
-      return { email:payload.email, role, userId:null, permissions:["DASHBOARD","PERSONNEL","LEGAJOS","LICENSES","ATTENDANCE"] as AppPermission[], mustChangePassword:false, officeId:null as number|null, officeName:null as string|null, generalAdmin:true };
+      return { email:payload.email, role, userId:null, permissions:["DASHBOARD","PERSONNEL","LEGAJOS","LICENSES","ATTENDANCE","QR_GENERATOR"] as AppPermission[], mustChangePassword:false, officeId:null as number|null, officeName:null as string|null, generalAdmin:true };
     }
 
     if (userId !== null) {
@@ -61,6 +61,7 @@ export function hasPermission(session: Session, permission: AppPermission): bool
 }
 export function canManageLicenses(session: Session): boolean { return hasPermission(session,"LICENSES"); }
 export function canManageAttendance(session: Session): boolean { return hasPermission(session,"ATTENDANCE"); }
+export function canGenerateQr(session: Session): boolean { return hasPermission(session,"QR_GENERATOR"); }
 export function canManagePersonnel(session: Session): boolean { return hasPermission(session,"PERSONNEL"); }
 export function canViewDashboard(session: Session): boolean { return hasPermission(session,"DASHBOARD"); }
 export function canViewLegajos(session: Session): boolean { return hasPermission(session,"LEGAJOS"); }
@@ -68,7 +69,7 @@ export function canViewLegajos(session: Session): boolean { return hasPermission
 export async function authenticateUser(email: string, password: string): Promise<{email:string;role:AppRole;userId:number|null;permissions:AppPermission[];mustChangePassword:boolean;officeId:number|null;generalAdmin:boolean}|null> {
   const normalized=email.trim().toLowerCase();
   const expectedEmail=process.env.ADMIN_EMAIL?.trim().toLowerCase(); const expectedPassword=process.env.ADMIN_PASSWORD;
-  if (expectedEmail && expectedPassword && normalized === expectedEmail && password === expectedPassword) return {email:expectedEmail,role:"ADMIN",userId:null,permissions:["DASHBOARD","PERSONNEL","LEGAJOS","LICENSES","ATTENDANCE"],mustChangePassword:false,officeId:null,generalAdmin:true};
+  if (expectedEmail && expectedPassword && normalized === expectedEmail && password === expectedPassword) return {email:expectedEmail,role:"ADMIN",userId:null,permissions:["DASHBOARD","PERSONNEL","LEGAJOS","LICENSES","ATTENDANCE","QR_GENERATOR"],mustChangePassword:false,officeId:null,generalAdmin:true};
   try {
     const sql=db();
     const row=(await sql`SELECT id,email,password_hash,role,active,must_change_password,office_id,is_general_admin FROM app_users WHERE lower(email)=lower(${normalized}) LIMIT 1`)[0];

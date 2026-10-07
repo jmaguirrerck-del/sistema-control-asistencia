@@ -5,7 +5,7 @@ import { ensureV13Schema } from "@/lib/migrations";
 import { getAdminSession,isGeneralAdmin } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 
-const VALID_PERMISSIONS=["DASHBOARD","PERSONNEL","LEGAJOS","LICENSES","ATTENDANCE"] as const;
+const VALID_PERMISSIONS=["DASHBOARD","PERSONNEL","LEGAJOS","LICENSES","ATTENDANCE","QR_GENERATOR"] as const;
 function normalizePermissions(value:any): string[]{const list=Array.isArray(value)?value.map(String):[];return [...new Set(list.filter(x=>(VALID_PERMISSIONS as readonly string[]).includes(x)))];}
 function legacyRole(perms:string[]){if(perms.length===1&&perms[0]==="LICENSES")return "LICENSE_OPERATOR";if(perms.length===1&&perms[0]==="ATTENDANCE")return "ATTENDANCE_OPERATOR";return "CUSTOM";}
 

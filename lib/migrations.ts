@@ -40,7 +40,7 @@ export async function ensureV13Schema(){
     office_id BIGINT PRIMARY KEY REFERENCES offices(id) ON DELETE CASCADE,
     latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, radius_meters INTEGER NOT NULL DEFAULT 75,
     lateness_tolerance_minutes INTEGER NOT NULL DEFAULT 15, auto_close_grace_minutes INTEGER NOT NULL DEFAULT 60,
-    qr_ttl_minutes INTEGER NOT NULL DEFAULT 5, absence_count_start_date DATE,
+    qr_ttl_minutes INTEGER NOT NULL DEFAULT 3, absence_count_start_date DATE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`;
   await sql`ALTER TABLE office_settings ADD COLUMN IF NOT EXISTS absence_count_start_date DATE`;
@@ -73,6 +73,8 @@ export async function ensureV13Schema(){
   // V1.22: tolerancia oficial de ingreso fijada en 15 minutos.
   await sql`UPDATE office_settings SET lateness_tolerance_minutes=15,updated_at=now() WHERE id=1 AND lateness_tolerance_minutes<>15`;
   await sql`UPDATE office_configs c SET latitude=s.latitude,longitude=s.longitude,radius_meters=s.radius_meters,lateness_tolerance_minutes=s.lateness_tolerance_minutes,auto_close_grace_minutes=s.auto_close_grace_minutes,qr_ttl_minutes=s.qr_ttl_minutes,absence_count_start_date=s.absence_count_start_date,updated_at=now() FROM office_settings s WHERE c.office_id=1 AND s.id=1`;
+  // V1.28: el QR protegido se renueva cada 3 minutos en todas las oficinas.
+  await sql`UPDATE office_configs SET qr_ttl_minutes=3,updated_at=now() WHERE qr_ttl_minutes<>3`;
   await sql`CREATE TABLE IF NOT EXISTS employee_devices (
     id BIGSERIAL PRIMARY KEY, employee_id TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     device_hash TEXT NOT NULL UNIQUE, user_agent TEXT, active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -166,7 +168,8 @@ export async function ensureV13Schema(){
     ('PERSONNEL','Gestión de personal','Alta, edición, horarios, PIN y dispositivos del personal de la oficina asignada.'),
     ('LEGAJOS','Legajos e inasistencias','Consultar legajos, faltas justificadas/no justificadas y tardanzas de la oficina asignada.'),
     ('LICENSES','Operador de Licencias','Registrar y consultar licencias, vacaciones, saldos e historial de licencias.'),
-    ('ATTENDANCE','Operador de Asistencia','Consultar registros y realizar marcaciones manuales/correcciones excepcionales.')
+    ('ATTENDANCE','Operador de Asistencia','Consultar registros y realizar marcaciones manuales/correcciones excepcionales.'),
+    ('QR_GENERATOR','Generador de QR','Acceder a la pantalla protegida que genera el QR dinámico de la oficina asignada.')
     ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,active=TRUE`;
   // Migración automática de usuarios existentes: conserva los permisos que ya tenían por rol.
   await sql`INSERT INTO app_user_permissions(user_id,permission_code,granted_by)

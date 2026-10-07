@@ -1,0 +1,19 @@
+SISTEMA DE CONTROL DE ASISTENCIA · V1.30.0
+
+Este ZIP es un proyecto completo para actualizar el repositorio de GitHub/Vercel.
+
+NOVEDAD PRINCIPAL:
+- Reporte mensual individual por agente con entradas, salidas intermedias, reingresos y salida final.
+- Exportación individual a Excel.
+- Impresión / PDF individual en A4 apaisado.
+- Resumen mensual de presentes, faltas, tardanzas y compensaciones.
+
+SE CONSERVA:
+- Generador de QR con permiso QR_GENERATOR.
+- Renovación automática del QR cada 3 minutos.
+- Gestión de personal, registros, legajos, licencias, usuarios y oficinas.
+
+ACTUALIZACIÓN:
+1. Reemplazar el contenido del repositorio por el contenido de este ZIP, conservando las variables de entorno de Vercel.
+2. Hacer commit y push.
+3. Vercel realizará el despliegue si el proyecto sigue vinculado al repositorio.
